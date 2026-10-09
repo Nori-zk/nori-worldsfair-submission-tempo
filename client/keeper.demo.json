@@ -4,17 +4,17 @@
         "noriSnapshot": "${NORI_ETH_SNAPSHOT_ADDRESS}",
         "proofQueue": "${NORI_ETH_PROOF_QUEUE_ADDRESS}"
     },
-    "solana": {
-        "rpcUrl": "${SOLANA_RPC_NETWORK_URL}",
-        "keypair": "${SOLANA_PAYER_KEYPAIR_PATH}",
-        "noriProgram": "${NORI_SOL_TOKEN_PROGRAM_ID}"
+    "tempo": {
+        "rpcUrl": "${TEMPO_RPC_NETWORK_URL}",
+        "bridge": "${NORI_TEMPO_TOKEN_BRIDGE_ADDRESS}",
+        "backstop": "${NORI_TEMPO_BACKSTOP_ADDRESS}"
     },
     "intervals": { "snapshotSecs": 900, "checkpointSecs": 120, "pollSecs": 30 },
     "stateFile": "keeper-state.json",
     "guards": [
         {
             "name": "demo-lockbox",
-            "mint": "${BACKSTOP_DEMO_MINT}",
+            "token": "${BACKSTOP_DEMO_TOKEN}",
             "backing": {
                 "target": "${NORI_ETH_DEMO_LOCKBOX_ADDRESS}",
                 "signature": "locked()",
@@ -26,7 +26,7 @@
                 "args": []
             },
             "backingDecimals": 18,
-            "tolerance": "1000000000",
+            "tolerance": "1000000",
             "windowSecs": 600,
             "skewSecs": 60,
             "checkpointIntervalSecs": 120,

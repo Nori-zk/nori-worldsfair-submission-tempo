@@ -3,7 +3,7 @@ import type {
     ConnectionName,
     EnqueuedProofRequest,
     ProofQueueBatchSummary,
-} from '@nori-zk/nori-bridge-solana-sdk';
+} from '@nori-zk/nori-bridge-tempo-sdk';
 
 /** A committed batch, with the filtered contract's request ids in it when there is a filter. */
 export interface ShownBatch extends ProofQueueBatchSummary {
@@ -13,7 +13,7 @@ export interface ShownBatch extends ProofQueueBatchSummary {
 
 /** What the dashboard shows: the newest batches and the requests still waiting. */
 export interface BatchesView {
-    /** How many batches the Nori program holds. */
+    /** How many batches the Nori bridge holds. */
     batchCount: bigint;
     /** The first request id no batch covers yet. */
     queueCursor: bigint;
@@ -41,7 +41,7 @@ export const EMPTY_VIEW: BatchesView = {
  * The bridge's newest batches and the requests still waiting, for every
  * contract or one (`target`, from `?target=`). No node is a dead end.
  *
- * - `loading` reads the view: the Nori program's state on Solana, then the
+ * - `loading` reads the view: the Nori bridge's state on Tempo, then the
  *   newest ten batches (or, with a filter, the contract's requests from
  *   Ethereum newest first, mapped to their batches until ten are found),
  *   the requests no batch covers yet, and Ethereum's finalized block.

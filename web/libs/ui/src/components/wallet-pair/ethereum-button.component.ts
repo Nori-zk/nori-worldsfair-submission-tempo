@@ -1,6 +1,6 @@
 import { Component } from '@yaw-rx/core';
 import { combineLatest, map, take, type Observable } from 'rxjs';
-import type { EthereumWalletState } from '@nori-zk/nori-bridge-solana-sdk';
+import type { EthereumWalletState } from '@nori-zk/nori-bridge-tempo-sdk';
 import { ethereumLogo } from '../../brand/brand.js';
 import { ChainButton } from './chain-button.component.js';
 

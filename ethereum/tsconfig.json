@@ -16,6 +16,7 @@
     "files": ["./hardhat-env.d.ts"],
     "include": [
         "*.ts",
+        "contracts/**/*.ts",
         "tasks/**/*.ts",
         "test/**/*.ts",
         "test/**/*.json",

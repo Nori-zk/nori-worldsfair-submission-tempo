@@ -10,7 +10,7 @@ import {
 } from '../vectors/snapshotReadVectors.js';
 
 describe('Snapshot read vectors', () => {
-    it('Should match the committed vectors nori-read tests against (npm run vectors regenerates them)', async function () {
+    it('Should match the committed vectors the NoriRead tests use (npm run vectors regenerates them)', async function () {
         const { ethers } = await hre.network.create('vectors');
 
         const vectors = await buildLocalSnapshotReadVectors(ethers);

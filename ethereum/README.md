@@ -18,12 +18,12 @@ Result leaf: `sha256(0x00 ++ queryId ++ result)`, where
 
 ## A consumer must
 
-- pin the Nori program, the `NoriSnapshot` address and its query ids;
+- pin the Nori bridge, the `NoriSnapshot` address and its query ids;
 - reject stale snapshots, and track the newest block per query (old snapshots stay valid);
 - avoid views a flash loan can move within one transaction;
 - pin only targets whose views it trusts: Nori proves what a contract returned, so a precompile or an upgradeable contract proves whatever its code (or admin) makes it return.
 
-`nori-read` does the rest. `snapshotProof.ts` is the TS mirror.
+`NoriRead` ([tempo/](../tempo/README.md)) does the rest. `snapshotProof.ts` is the TS mirror.
 
 ## Commands
 

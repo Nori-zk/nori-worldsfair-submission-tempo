@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 // Summarizes a `keeper run` log as Markdown: snapshots, time from each
-// snapshot's Ethereum block to its reads applied on Solana, failures,
+// snapshot's Ethereum block to its reads applied on Tempo, failures,
 // checkpoint gaps and status changes, then each guard's status now.
 // Usage: soak-report <config.json> <keeper.log>
 import { readFileSync } from 'node:fs';
-import { FetchRequest, JsonRpcProvider } from 'ethers';
 import { loadConfig, loadEnv } from '../keeper/config.js';
 import { Keeper } from '../keeper/keeper.js';
-import { RPC_TIMEOUT_MS } from '../keeper/solana.js';
+import { createProvider } from '../keeper/tempo.js';
 
 const [configPath, logPath] = process.argv.slice(2);
 if (!configPath || !logPath) {
@@ -16,9 +15,7 @@ if (!configPath || !logPath) {
 }
 loadEnv();
 const config = loadConfig(configPath);
-const request = new FetchRequest(config.ethereum.rpcUrl);
-request.timeout = RPC_TIMEOUT_MS;
-const provider = new JsonRpcProvider(request);
+const provider = createProvider(config.ethereum.rpcUrl);
 
 interface Line {
     at: number;
@@ -58,10 +55,7 @@ for (const { at, text } of lines) {
             sent.set(snapshot[1], at);
     }
     if (/failed|FAILED/.test(text)) {
-        const key = text
-            .replace(/0x[0-9a-f]{8,}/gi, '0x…')
-            .replace(/\b[1-9A-HJ-NP-Za-km-z]{32,44}\b/g, '<address>')
-            .slice(0, 160);
+        const key = text.replace(/0x[0-9a-f]{8,}/gi, '0x…').slice(0, 160);
         failures.set(key, (failures.get(key) ?? 0) + 1);
     }
     const checkpoint = /^(\S+): checkpoint$/.exec(text);

@@ -2,7 +2,7 @@ import { Component, Inject, RxElement } from '@yaw-rx/core';
 import { RxIf } from '@yaw-rx/core/directives/rx-if';
 import { combineLatest, map, type Observable, take } from 'rxjs';
 import { formatEther, formatUnits } from 'ethers';
-import { ConnectionsService, TokenListService } from '@nori-zk/solana-web-ui';
+import { ConnectionsService, TokenListService } from '@nori-zk/tempo-web-ui';
 import { TOKEN_CHOSEN } from './prove-form/token-option.component.js';
 import './prove-form/token-select.component.js';
 import type { BalanceRequest } from '../ystate/prove-balance.impl.js';
@@ -27,7 +27,7 @@ const atNode =
 /**
  * The form for proving a balance: the token and the address, the balance and
  * fee read as soon as both are valid, the snapshot sent from the wallet, and
- * the proof followed to Solana. It opens once the wallet has shared an
+ * the proof followed to Tempo. It opens once the wallet has shared an
  * account, with that account as the address.
  */
 @Component({
@@ -124,7 +124,7 @@ export class ProveForm extends RxElement {
         return this.state$.pipe(map((state) => !atNode('proving')(state)));
     }
 
-    /** "Read again" after a failed read, else "Prove on Solana", or confirming while the wallet asks. */
+    /** "Read again" after a failed read, else "Prove on Tempo", or confirming while the wallet asks. */
     get actionLabel$(): Observable<string> {
         return this.state$.pipe(
             map((state) =>
@@ -132,7 +132,7 @@ export class ProveForm extends RxElement {
                     ? 'Read again'
                     : state.node === 'awaitingSignature'
                       ? 'Confirming in your wallet…'
-                      : 'Prove on Solana',
+                      : 'Prove on Tempo',
             ),
         );
     }

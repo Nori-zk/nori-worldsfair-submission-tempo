@@ -4,7 +4,7 @@ import noriFavicon from './favicon.png';
 import backgroundLight from './BackgroundLight.svg';
 import bottomShadows from './BottomShadows.svg';
 import ethereumLogo from './Ethereum.svg';
-import solanaLogo from './SolanaLogoMark.svg';
+import tempoLogo from './TempoLogoMark.svg';
 import swapIcon from './Swap.svg';
 import tokenIcon from './Token.svg';
 
@@ -14,7 +14,7 @@ export {
     backgroundLight,
     bottomShadows,
     ethereumLogo,
-    solanaLogo,
+    tempoLogo,
     swapIcon,
     tokenIcon,
 };

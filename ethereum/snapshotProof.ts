@@ -8,27 +8,27 @@ import {
     toBeHex,
     zeroPadValue,
 } from 'ethers';
+import {
+    COMMITMENTS_SLOT_INDEX,
+    MAX_QUERIES,
+    MAX_RESULT_PATH,
+    RESULT_LEAF_PREFIX,
+    SENTINEL,
+} from './contracts/NoriSnapshot.const.js';
 
 /**
- * What a witness builder and a Solana consumer need to check a `NoriSnapshot`
+ * What a witness builder and a Tempo consumer need to check a `NoriSnapshot`
  * result: the proof request leaf's keys, the results tree and the committed
  * word. Every function mirrors the contract's of the same name.
  */
 
-/** Set on every committed word in place of the results root's top bit. */
-export const SENTINEL = 1n << 255n;
-
-/** Storage index of `NoriSnapshot.commitments`. */
-export const COMMITMENTS_SLOT_INDEX = 0n;
-
-/** Most queries in one snapshot. */
-export const MAX_QUERIES = 256;
-
-/** Longest results path: a tree over `MAX_QUERIES` leaves. */
-export const MAX_RESULT_PATH = 8;
-
-/** Prefixed to every results leaf so it can never pass for a node. */
-export const RESULT_LEAF_PREFIX = '0x00';
+export {
+    COMMITMENTS_SLOT_INDEX,
+    MAX_QUERIES,
+    MAX_RESULT_PATH,
+    RESULT_LEAF_PREFIX,
+    SENTINEL,
+};
 
 const ZERO_LEAF = zeroPadValue('0x', 32);
 const abi = AbiCoder.defaultAbiCoder();
@@ -176,7 +176,7 @@ function isWord(hex: string): boolean {
 }
 
 /**
- * The results half of nori-read's `verify_snapshot_result`, with its bounds:
+ * The results half of `NoriRead.verifySnapshotResult`, with its bounds:
  * the proven commitment word carries the sentinel (so it is a snapshot, not a
  * false zero) and equals the root recomputed from the pinned `queryId`, the
  * result, its index and its path. A consumer also checks the proof request

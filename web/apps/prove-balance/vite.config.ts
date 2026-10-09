@@ -9,11 +9,11 @@ export default defineConfig({
     plugins: [viteAssets(['.css', '.html']), viteWatchAssets(), viteTransform(), viteWasm()],
     define: { NORI_WEB_ENV: JSON.stringify(loadWebEnv()) },
     esbuild: { target: 'es2022' },
-    resolve: { dedupe: ['rxjs', '@nori-zk/nori-bridge-solana-sdk'] },
+    resolve: { dedupe: ['rxjs', '@nori-zk/nori-bridge-tempo-sdk'] },
     optimizeDeps: {
         exclude: [
-            '@nori-zk/nori-bridge-solana-sdk',
-            '@nori-zk/ethereum-solana-proof-queue-utils-glam',
+            '@nori-zk/nori-bridge-tempo-sdk',
+            '@nori-zk/ethereum-tempo-proof-queue-utils-glam',
         ],
     },
     server: { port: 5180 },

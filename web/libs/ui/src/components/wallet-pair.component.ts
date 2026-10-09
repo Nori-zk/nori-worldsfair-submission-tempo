@@ -2,16 +2,16 @@ import { Component, Inject, RxElement } from '@yaw-rx/core';
 import { RxFor } from '@yaw-rx/core/directives/rx-for';
 import { RxIf } from '@yaw-rx/core/directives/rx-if';
 import { map, type Observable } from 'rxjs';
-import type { WalletInfo } from '@nori-zk/nori-bridge-solana-sdk';
+import type { WalletInfo } from '@nori-zk/nori-bridge-tempo-sdk';
 import { swapIcon } from '../brand/brand.js';
 import { ConnectionsService } from '../services/connections.service.js';
 import './wallet-pair/ethereum-button.component.js';
-import './wallet-pair/solana-button.component.js';
+import './wallet-pair/tempo-button.component.js';
 import { WALLET_CHOSEN } from './wallet-pair/wallet-option.component.js';
 import styles from './wallet-pair.component.css';
 
 /**
- * Ethereum and Solana side by side, as the bridge zkapp's wallet pair: each
+ * Ethereum and Tempo side by side, as the bridge zkapp's wallet pair: each
  * chain's button shows its connection, and while several wallets are
  * installed the user chooses one under the pair.
  */
@@ -22,7 +22,7 @@ import styles from './wallet-pair.component.css';
         <div class="pair">
             <ethereum-button></ethereum-button>
             <img class="swap" src="${swapIcon}" alt="" />
-            <solana-button></solana-button>
+            <tempo-button></tempo-button>
         </div>
         <div rx-if="choosing">
             <div class="wallets" rx-for="wallets by uuid">

@@ -1,0 +1,172 @@
+{
+  "_format": "hh3-artifact-1",
+  "contractName": "INoriTempoTokenBridge",
+  "sourceName": "contracts/interfaces/INoriTempoTokenBridge.sol",
+  "abi": [
+    {
+      "inputs": [],
+      "name": "ethProofQueueAddress",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint64",
+          "name": "proofQueueBatchIndex",
+          "type": "uint64"
+        }
+      ],
+      "name": "proofQueueBatch",
+      "outputs": [
+        {
+          "components": [
+            {
+              "internalType": "bytes32",
+              "name": "root",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "uint64",
+              "name": "outputBlockNumber",
+              "type": "uint64"
+            },
+            {
+              "internalType": "uint64",
+              "name": "inputQueueCursor",
+              "type": "uint64"
+            },
+            {
+              "internalType": "uint64",
+              "name": "outputQueueCursor",
+              "type": "uint64"
+            },
+            {
+              "internalType": "uint64",
+              "name": "tempoBlockNumber",
+              "type": "uint64"
+            }
+          ],
+          "internalType": "struct INoriTempoTokenBridge.ProofRequestRootEntry",
+          "name": "",
+          "type": "tuple"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "target",
+              "type": "address"
+            },
+            {
+              "internalType": "uint8",
+              "name": "collectionKeysCount",
+              "type": "uint8"
+            },
+            {
+              "internalType": "bytes32[2]",
+              "name": "collectionKeys",
+              "type": "bytes32[2]"
+            },
+            {
+              "internalType": "uint256",
+              "name": "value",
+              "type": "uint256"
+            }
+          ],
+          "internalType": "struct INoriTempoTokenBridge.VerifiedRequest",
+          "name": "request",
+          "type": "tuple"
+        }
+      ],
+      "name": "requestLeafHash",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "bytes32[]",
+              "name": "path",
+              "type": "bytes32[]"
+            },
+            {
+              "internalType": "uint64",
+              "name": "index",
+              "type": "uint64"
+            },
+            {
+              "components": [
+                {
+                  "internalType": "address",
+                  "name": "target",
+                  "type": "address"
+                },
+                {
+                  "internalType": "uint8",
+                  "name": "collectionKeysCount",
+                  "type": "uint8"
+                },
+                {
+                  "internalType": "bytes32[2]",
+                  "name": "collectionKeys",
+                  "type": "bytes32[2]"
+                },
+                {
+                  "internalType": "uint256",
+                  "name": "value",
+                  "type": "uint256"
+                }
+              ],
+              "internalType": "struct INoriTempoTokenBridge.VerifiedRequest",
+              "name": "value",
+              "type": "tuple"
+            }
+          ],
+          "internalType": "struct INoriTempoTokenBridge.VerifiedRequestWitness",
+          "name": "witness",
+          "type": "tuple"
+        }
+      ],
+      "name": "verifiedRequestWitnessRoot",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x",
+  "deployedBytecode": "0x",
+  "linkReferences": {},
+  "deployedLinkReferences": {},
+  "immutableReferences": {},
+  "inputSourceName": "project/contracts/interfaces/INoriTempoTokenBridge.sol",
+  "buildInfoId": "solc-0_8_28-49958c29dad83207801066ae63087affef645cad"
+}

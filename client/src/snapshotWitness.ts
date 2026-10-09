@@ -1,4 +1,4 @@
-import { Interface, getBytes, toBeHex, type TransactionReceipt } from 'ethers';
+import { Interface, toBeHex, type TransactionReceipt } from 'ethers';
 import {
     commitmentWordOf,
     noriSnapshotJson,
@@ -9,7 +9,8 @@ import {
     request_leaf_hash,
     type RequestLeaf,
     type RequestWitness,
-} from '@nori-zk/ethereum-solana-proof-queue-utils-glam';
+} from '@nori-zk/ethereum-tempo-proof-queue-utils-glam';
+import { SNAPSHOT_COLLECTION_KEYS } from '@nori-zk/tempo-backstop';
 
 const snapshotInterface = new Interface(noriSnapshotJson.abi);
 
@@ -25,24 +26,23 @@ export interface SnapshotEvent {
 }
 
 /**
- * nori-read's `SnapshotResultWitness`, in the shape of the program's Codama
- * types: 32- and 20-byte arrays wrapped in one-element tuples, the U256
- * value little-endian.
+ * `NoriRead.SnapshotResultWitness`, as `Backstop.submitRead` and
+ * `NoriReadExample.readSnapshotResult` take it.
  */
 export interface SnapshotResultWitnessArgs {
     request: {
-        path: Array<readonly [Uint8Array]>;
+        path: string[];
         index: bigint;
         value: {
-            target: readonly [Uint8Array];
+            target: string;
             collectionKeysCount: number;
-            collectionKeys: [readonly [Uint8Array], readonly [Uint8Array]];
-            value: readonly [Uint8Array];
+            collectionKeys: [string, string];
+            value: bigint;
         };
     };
-    result: readonly [Uint8Array];
+    result: string;
     resultIndex: number;
-    resultPath: Array<readonly [Uint8Array]>;
+    resultPath: string[];
 }
 
 /** Reads the `Snapshot` event that `noriSnapshot` emitted in `receipt`. */
@@ -76,7 +76,7 @@ export function snapshotLeaf(
 ): RequestLeaf {
     return {
         target: noriSnapshot,
-        collectionKeysCount: 2,
+        collectionKeysCount: SNAPSHOT_COLLECTION_KEYS,
         collectionKeys: [
             toBeHex(event.snapshotIndex, 32),
             timeKeyOf(event.blockNumber, event.timestamp),
@@ -84,8 +84,6 @@ export function snapshotLeaf(
         value: toBeHex(commitmentWordOf(event.resultsRoot), 32),
     };
 }
-
-const word = (hex: string) => [getBytes(hex)] as const;
 
 /**
  * Combines the request's path in its proof queue batch (from the sdk's
@@ -114,17 +112,17 @@ export function snapshotResultWitness(
 
     return {
         request: {
-            path: requestWitness.path.map(word),
+            path: [...requestWitness.path],
             index: BigInt(requestWitness.index),
             value: {
-                target: [getBytes(noriSnapshot)],
-                collectionKeysCount: 2,
-                collectionKeys: [word(key0), word(key1)],
-                value: [getBytes(leaf.value).reverse()],
+                target: noriSnapshot,
+                collectionKeysCount: SNAPSHOT_COLLECTION_KEYS,
+                collectionKeys: [key0, key1],
+                value: BigInt(leaf.value),
             },
         },
-        result: word(event.results[resultIndex] ?? '0x'),
+        result: event.results[resultIndex] ?? '0x',
         resultIndex,
-        resultPath: result.path.map(word),
+        resultPath: result.path,
     };
 }

@@ -1,5 +1,5 @@
 import { define, type StateUnion } from '@yaw-rx/ystate';
-import type { ConnectionName } from '@nori-zk/nori-bridge-solana-sdk';
+import type { ConnectionName } from '@nori-zk/nori-bridge-tempo-sdk';
 
 /** What the user asked to prove: an asset's balance held by an address. */
 const request = {
@@ -45,7 +45,7 @@ const readRequest = {
  *   be edited.
  * - `proving` carries the signed transaction's hash. The sdk's proof request
  *   machine follows it from there, through mining, the bridge's stages and
- *   the proof landing on Solana. `another` starts another proof, reading
+ *   the proof landing on Tempo. `another` starts another proof, reading
  *   the same asset and holder again. A transaction that reverts on Ethereum
  *   goes to `sendFailed`, to send again or edit.
  */

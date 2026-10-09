@@ -6,7 +6,7 @@
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
 
-        <mxCell id="title" value="&lt;b&gt;How a read works: any Solana program reads proven Ethereum state&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=middle;fontSize=18;" vertex="1" parent="1">
+        <mxCell id="title" value="&lt;b&gt;How a read works: any Tempo contract reads proven Ethereum state&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=middle;fontSize=18;" vertex="1" parent="1">
           <mxGeometry x="40" y="0" width="900" height="30" as="geometry" />
         </mxCell>
 
@@ -30,20 +30,20 @@
           <mxGeometry x="20" y="170" width="220" height="110" as="geometry" />
         </mxCell>
 
-        <mxCell id="sol" value="Solana" style="swimlane;startSize=30;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=14;rounded=1;arcSize=4;" vertex="1" parent="1">
+        <mxCell id="sol" value="Tempo" style="swimlane;startSize=30;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;fontSize=14;rounded=1;arcSize=4;" vertex="1" parent="1">
           <mxGeometry x="840" y="40" width="620" height="440" as="geometry" />
         </mxCell>
-        <mxCell id="lc" value="&lt;b&gt;3. Nori light client&lt;/b&gt;&lt;br&gt;verifies each proof (~100k CU)&lt;br&gt;stores state root + batch roots" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;strokeWidth=2;" vertex="1" parent="sol">
+        <mxCell id="lc" value="&lt;b&gt;3. Nori bridge&lt;/b&gt;&lt;br&gt;verifies each SP1 Groth16 proof&lt;br&gt;stores state root + batch roots" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;strokeWidth=2;" vertex="1" parent="sol">
           <mxGeometry x="20" y="50" width="250" height="90" as="geometry" />
         </mxCell>
-        <mxCell id="read" value="&lt;b&gt;5. nori-read&lt;/b&gt; (built)&lt;br&gt;in your program: checks one result&lt;br&gt;~3,400 CU, one 558-byte tx" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;strokeWidth=2;" vertex="1" parent="sol">
+        <mxCell id="read" value="&lt;b&gt;5. NoriRead&lt;/b&gt; (built)&lt;br&gt;in your contract: checks one result&lt;br&gt;a whole read ≤ 49,332 gas" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;strokeWidth=2;" vertex="1" parent="sol">
           <mxGeometry x="20" y="180" width="250" height="90" as="geometry" />
         </mxCell>
-        <mxCell id="mpt" value="&lt;b&gt;Storage-proof check&lt;/b&gt; (roadmap)&lt;br&gt;any slot, against the state&lt;br&gt;root already on Solana" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;dashed=1;" vertex="1" parent="sol">
+        <mxCell id="mpt" value="&lt;b&gt;Storage-proof check&lt;/b&gt; (roadmap)&lt;br&gt;any slot, against the state&lt;br&gt;root already on Tempo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;dashed=1;" vertex="1" parent="sol">
           <mxGeometry x="20" y="330" width="250" height="80" as="geometry" />
         </mxCell>
 
-        <mxCell id="apps" value="Any Solana program" style="swimlane;startSize=30;fillColor=#ffffff;strokeColor=#82b366;fontStyle=1;fontSize=13;rounded=1;arcSize=4;" vertex="1" parent="sol">
+        <mxCell id="apps" value="Any Tempo contract" style="swimlane;startSize=30;fillColor=#ffffff;strokeColor=#82b366;fontStyle=1;fontSize=13;rounded=1;arcSize=4;" vertex="1" parent="sol">
           <mxGeometry x="330" y="50" width="270" height="370" as="geometry" />
         </mxCell>
         <mxCell id="app1" value="&lt;b&gt;Backstop&lt;/b&gt;: circuit breakers (built)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;" vertex="1" parent="apps">
@@ -103,13 +103,13 @@
         <mxCell id="tx" value="witness tx" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;fontSize=11;" edge="1" parent="1" source="client" target="apps">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="trust" value="&lt;b&gt;You trust:&lt;/b&gt; Helios (a weak-subjectivity checkpoint + a sync-committee supermajority) · SP1 and its Groth16 verifier · program upgrade authorities" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
+        <mxCell id="trust" value="&lt;b&gt;You trust:&lt;/b&gt; Helios (a weak-subjectivity checkpoint + a sync-committee supermajority) · SP1 and its Groth16 verifier · the contracts you pin" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
           <mxGeometry x="40" y="620" width="700" height="60" as="geometry" />
         </mxCell>
         <mxCell id="notrust" value="&lt;b&gt;You don't trust:&lt;/b&gt; guardian sets, DVNs, oracle committees, relayers or RPC providers. They can delay a read, not forge it." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
           <mxGeometry x="760" y="620" width="700" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="legend" value="Solid border: built, running on Sepolia + Solana devnet · Dashed: roadmap · Measured: 15–22 min end to end (median 18), ~15 of it Ethereum finality + proving" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#555555;" vertex="1" parent="1">
+        <mxCell id="legend" value="Solid border: built, the whole loop run locally (scripts/dry-run.sh) · Dashed: roadmap · An Ethereum block reaches Tempo after finality (~13 min) + proving" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#555555;" vertex="1" parent="1">
           <mxGeometry x="40" y="690" width="1420" height="30" as="geometry" />
         </mxCell>
       </root>

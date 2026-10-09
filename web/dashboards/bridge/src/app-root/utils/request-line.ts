@@ -1,4 +1,4 @@
-import { type EnqueuedProofRequest } from '@nori-zk/nori-bridge-solana-sdk';
+import { type EnqueuedProofRequest } from '@nori-zk/nori-bridge-tempo-sdk';
 import { addressUrl, contractName, shortHex, transactionUrl } from './format.js';
 
 /** A request as `request-line` takes it. */

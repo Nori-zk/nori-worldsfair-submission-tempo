@@ -14,7 +14,7 @@ import {
     getNoriBridgeInfraStateWithTimings$,
     getNoriBridgeInfraTimings$,
     startNoriBridgeInfraTransitions,
-} from '@nori-zk/nori-bridge-solana-sdk';
+} from '@nori-zk/nori-bridge-tempo-sdk';
 import { ConnectionsService } from './connections.service.js';
 import {
     NORI_BRIDGE_INFRA_STAGE_TEXT,

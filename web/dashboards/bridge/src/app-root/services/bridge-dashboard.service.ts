@@ -16,8 +16,8 @@ import { getAddress } from 'ethers';
 import {
     type EnqueuedProofRequest,
     getEnqueuedProofRequests,
-} from '@nori-zk/nori-bridge-solana-sdk';
-import { ConnectionsService, NoriBridgeInfraService } from '@nori-zk/solana-web-ui';
+} from '@nori-zk/nori-bridge-tempo-sdk';
+import { ConnectionsService, NoriBridgeInfraService } from '@nori-zk/tempo-web-ui';
 import { type ShownBatch, type BridgeBatchesState } from '../ystate/bridge-batches.js';
 import {
     type BatchesAddresses,
@@ -78,7 +78,7 @@ export class BridgeDashboardService {
     private readonly onPopState = (): void => this.target$.next(targetFromUrl());
 
     /**
-     * @param connections The connections, and the queue and program addresses.
+     * @param connections The connections, and the queue and bridge addresses.
      * @param noriBridgeInfra Nori's bridge state.
      */
     constructor(

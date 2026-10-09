@@ -4,7 +4,7 @@ import { distinctUntilChanged, filter, map, type Observable, switchMap, take } f
 import type {
     ProofRequestStateNodeUnion,
     UnprocessedProofRequestStateNodeUnion,
-} from '@nori-zk/nori-bridge-solana-sdk';
+} from '@nori-zk/nori-bridge-tempo-sdk';
 import { type FollowedProof, ProofProgressService } from '../services/proof-progress.service.js';
 import styles from './proof-progress.component.css';
 
@@ -21,7 +21,7 @@ const requestStatus = (request: ProofRequestStateNodeUnion): string => {
         case 'unprocessed':
             return `Request #${request.data.requestId.toString()} is waiting for the bridge`;
         case 'proofAvailable':
-            return `Proven on Solana in batch #${request.data.proofQueueBatchIndex.toString()}`;
+            return `Proven on Tempo in batch #${request.data.proofQueueBatchIndex.toString()}`;
         case 'waitingForConnectionWhileUndetermined':
         case 'waitingForConnectionWhileUnprocessed':
             return `Waiting for ${request.data.waitingOn.join(' and ')}`;
@@ -56,7 +56,7 @@ const progressFill = (progress: UnprocessedProofRequestStateNodeUnion): number =
  * @returns The detail.
  */
 const progressDetail = (progress: UnprocessedProofRequestStateNodeUnion): string => {
-    if (progress.node === 'FinishedWaiting') return 'Confirming on Solana';
+    if (progress.node === 'FinishedWaiting') return 'Confirming on Tempo';
     const { stage_name, time_remaining_sec } = progress.data;
     const left = Number.isFinite(time_remaining_sec)
         ? ` · about ${Math.max(0, Math.round(time_remaining_sec)).toString()}s left`
@@ -68,7 +68,7 @@ const progressDetail = (progress: UnprocessedProofRequestStateNodeUnion): string
 
 /**
  * Follows one proof request from the transaction that enqueued it until a
- * committed batch on Solana covers it. The status follows the proof request
+ * committed batch on Tempo covers it. The status follows the proof request
  * machine; while the request is `unprocessed`, a bar follows the bridge's
  * progress on it from the websocket.
  */
@@ -86,7 +86,7 @@ const progressDetail = (progress: UnprocessedProofRequestStateNodeUnion): string
                 <li [class.current]="atFinality">Ethereum finality</li>
                 <li [class.current]="atPrevious">Previous batch</li>
                 <li [class.current]="atCurrent">Proving</li>
-                <li [class.current]="atFinished">Solana</li>
+                <li [class.current]="atFinished">Tempo</li>
             </ol>
             <p class="detail">{{ detail }}</p>
         </div>

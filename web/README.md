@@ -1,23 +1,24 @@
 # web: browser apps
 
-Two apps on Sepolia + Solana devnet, built with [yaw](https://yaw-rx.github.io/) and
+Two apps on Sepolia + Tempo Moderato, built with [yaw](https://yaw-rx.github.io/) and
 [ystate](https://ystate.github.io/) on the Nori SDK. Each app's flow is a ystate graph,
 drawn next to it (`ProveBalanceGraph.svg`, `BridgeBatchesGraph.svg`).
 
-| Package                  | What                                                                                                                                             |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `apps/prove-balance`     | Prove on Solana what an Ethereum address holds: one `NoriSnapshot` transaction from your wallet, followed until a batch on Solana covers it      |
-| `dashboards/bridge`      | The whole proof queue: every batch Nori has settled on Solana, the requests still waiting, and the stage Nori's prover is in                     |
-| `libs/ui`                | Shared: wallet and connection buttons, the connection status bar, following a proof request, Nori's page layout and look                         |
-| `.env`, `env.ts`         | Public build constants: chain id, Ethereum RPC, proof queue and its deploy block, `NoriSnapshot`, Solana cluster, Nori program, Nori's websocket |
+| Package              | What                                                                                                                                                        |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/prove-balance` | Prove on Tempo what an Ethereum address holds: one `NoriSnapshot` transaction from your wallet, followed until a batch on Tempo covers it                   |
+| `dashboards/bridge`  | The whole proof queue: every batch Nori has settled on Tempo, the requests still waiting, and the stage Nori's prover is in                                 |
+| `libs/ui`            | Shared: wallet and connection buttons, the connection status bar, following a proof request, Nori's page layout and look                                    |
+| `.env`, `env.ts`     | Public build constants: Ethereum chain id and RPC, proof queue and its deploy block, `NoriSnapshot`, Tempo chain id and RPCs, Nori bridge, Nori's websocket |
 
 ```sh
 npm run dev -w web/apps/prove-balance   # http://localhost:5180
 npm run dev -w web/dashboards/bridge    # http://localhost:7400
 ```
 
-`build`, `build:ssg` (static pages) and `preview` work the same way. After a redeploy, update
-the addresses in `web/.env` (committed: public values only; everything in it reaches the browser).
+`build`, `build:ssg` (static pages) and `preview` work the same way. They need
+`NORI_TEMPO_TOKEN_BRIDGE_ADDRESS`, the Nori bridge on Moderato, in `web/.env`. After a redeploy,
+update the addresses in `web/.env` (committed: public values only; everything in it reaches the browser).
 
 ## Prove balance
 
@@ -27,17 +28,17 @@ account and ETH; choose ETH, a listed token or any ERC-20 address, and any holde
 reads the balance with the same view call the snapshot will make (ETH through Multicall3's
 `getEthBalance`, tokens through `balanceOf`) and shows it with the snapshot fee.
 
-"Prove on Solana" sends one `NoriSnapshot` transaction, which enqueues a proof request. The
+"Prove on Tempo" sends one `NoriSnapshot` transaction, which enqueues a proof request. The
 app then follows it: found on Ethereum, waiting for finality, waiting for the batch ahead,
-being proven, and settled in a batch on Solana. A declined signature, a failed read or a
+being proven, and settled in a batch on Tempo. A declined signature, a failed read or a
 dropped connection is shown, and you carry on from there.
 
 The result: that balance, as of that block, committed by `NoriSnapshot` and proven on
-Solana. Any Solana program can verify it with [`nori-read`](../nori-read/README.md).
+Tempo. Any Tempo contract can verify it with [`NoriRead`](../tempo/README.md).
 
 ## Bridge dashboard
 
-Batches Nori has settled on Solana, newest first. Above them, the requests no batch covers
+Batches Nori has settled on Tempo, newest first. Above them, the requests no batch covers
 yet, in three rows: waiting for Ethereum finality, scheduled for processing, and processing
 in Nori's current job, each with a countdown. Open a batch or a row to see its requests,
 each with the submitting contract and the enqueuing transaction, linked to Etherscan.

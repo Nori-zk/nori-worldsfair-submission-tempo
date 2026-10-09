@@ -1,0 +1,40 @@
+{
+  "_format": "hh3-artifact-1",
+  "contractName": "IGuardedToken",
+  "sourceName": "contracts/interfaces/IGuardedToken.sol",
+  "abi": [
+    {
+      "inputs": [],
+      "name": "decimals",
+      "outputs": [
+        {
+          "internalType": "uint8",
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "totalSupply",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x",
+  "deployedBytecode": "0x",
+  "linkReferences": {},
+  "deployedLinkReferences": {},
+  "immutableReferences": {},
+  "inputSourceName": "project/contracts/interfaces/IGuardedToken.sol",
+  "buildInfoId": "solc-0_8_28-49958c29dad83207801066ae63087affef645cad"
+}

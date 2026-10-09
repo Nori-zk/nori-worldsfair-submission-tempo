@@ -12,6 +12,13 @@
         "outDir": "build",
         "skipLibCheck": true
     },
-    "include": ["index.ts", "queries.ts", "snapshotProof.ts", "./artifacts"],
+    "include": [
+        "index.ts",
+        "kelpReplay.const.ts",
+        "queries.ts",
+        "snapshotProof.ts",
+        "contracts/**/*.const.ts",
+        "./artifacts"
+    ],
     "exclude": ["node_modules", "**/*.test.ts", "**/*.spec.ts"]
 }

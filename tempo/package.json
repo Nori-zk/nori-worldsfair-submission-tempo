@@ -1,0 +1,54 @@
+{
+    "name": "@nori-zk/tempo-backstop",
+    "version": "0.0.1",
+    "description": "NoriRead, Backstop and an example consumer: verify NoriSnapshot results on Tempo against the batches the Nori bridge commits",
+    "main": "build/index.js",
+    "types": "build/index.d.ts",
+    "exports": {
+        ".": {
+            "import": "./build/index.js"
+        }
+    },
+    "publishConfig": {
+        "registry": "https://registry.npmjs.org/",
+        "access": "public"
+    },
+    "type": "module",
+    "scripts": {
+        "build": "TEMPO_NETWORK=hardhat npm run clean && TEMPO_NETWORK=hardhat hardhat compile && node stabilize-types.mjs . && tsc -p tsconfig.package.json",
+        "test": "TEMPO_NETWORK=localnet hardhat test --network localnet; code=$?; node stabilize-types.mjs . && exit $code",
+        "test-ci": "TEMPO_NETWORK=localnet hardhat test --network localnet; code=$?; node stabilize-types.mjs . && exit $code",
+        "typecheck": "tsc --noEmit",
+        "lint": "npx eslint *.ts tasks test",
+        "lint:fix": "npx eslint *.ts tasks test --fix",
+        "clean": "hardhat clean",
+        "deploy": "dotenv -e ../.env -- sh -c 'npx hardhat --network $TEMPO_NETWORK deploy'",
+        "deploy-demo": "dotenv -e ../.env -- sh -c 'npx hardhat --network $TEMPO_NETWORK deployDemo \"$@\"' --"
+    },
+    "author": "",
+    "license": "MIT",
+    "dependencies": {
+        "@nori-zk/ethereum-snapshot": "*",
+        "@nori-zk/tempo-token-bridge": "0.0.1",
+        "esm-iso-logger": "1.0.2",
+        "ethers": "^6.16.0"
+    },
+    "devDependencies": {
+        "@nomicfoundation/hardhat-ethers": "^4.0.1",
+        "@nomicfoundation/hardhat-ethers-chai-matchers": "^3.0.0",
+        "@nomicfoundation/hardhat-mocha": "^3.0.17",
+        "@nomicfoundation/hardhat-network-helpers": "^3.0.6",
+        "@nomicfoundation/hardhat-typechain": "^3.0.0",
+        "@nori-zk/tempo-zk-utils": "0.0.1",
+        "@types/mocha": "^10.0.0",
+        "@types/node": "^25.2.3",
+        "chai": "^5.1.2",
+        "dotenv": "^17.2.4",
+        "dotenv-cli": "^8.0.0",
+        "hardhat": "^3.1.11",
+        "typechain": "^8.3.2"
+    },
+    "files": [
+        "build/"
+    ]
+}

@@ -15,7 +15,7 @@ export interface DemoLockbox$Type {
   readonly deployedLinkReferences: {};
   readonly immutableReferences: {"557":[{"length":32,"start":125},{"length":32,"start":207}]};
   readonly inputSourceName: "project/contracts/demo/DemoLockbox.sol";
-  readonly buildInfoId: "solc-0_8_28-0a35aedfa58c3beff6833f9c52b60ba88425b0ff";
+  readonly buildInfoId: "solc-0_8_28-b4cdd7fcce621c9aa16a60d7c123476c07d7a18b";
 };
 
 import "hardhat/types/artifacts";

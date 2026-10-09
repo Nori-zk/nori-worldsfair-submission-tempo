@@ -1,7 +1,7 @@
 {
     "name": "@nori-zk/ethereum-snapshot",
     "version": "0.0.1",
-    "description": "NoriSnapshot: make any Ethereum view call provable on Solana through the Nori proof request queue",
+    "description": "NoriSnapshot: make any Ethereum view call provable on Tempo through the Nori proof request queue",
     "main": "build/index.js",
     "types": "build/index.d.ts",
     "exports": {
@@ -34,7 +34,7 @@
     "author": "",
     "license": "MIT",
     "dependencies": {
-        "@nori-zk/ethereum-solana-bridge": "0.0.1",
+        "@nori-zk/ethereum-tempo-bridge": "0.0.1",
         "esm-iso-logger": "1.0.2",
         "ethers": "^6.16.0"
     },
@@ -44,7 +44,7 @@
         "@nomicfoundation/hardhat-mocha": "^3.0.17",
         "@nomicfoundation/hardhat-network-helpers": "^3.0.6",
         "@nomicfoundation/hardhat-typechain": "^3.0.0",
-        "@nori-zk/ethereum-solana-proof-queue-utils-glam": "0.0.1",
+        "@nori-zk/ethereum-tempo-proof-queue-utils-glam": "0.0.1",
         "@types/mocha": "^10.0.0",
         "@types/node": "^25.2.3",
         "chai": "^5.1.2",

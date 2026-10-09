@@ -1,25 +1,44 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { FetchRequest, isError, JsonRpcProvider, Wallet } from 'ethers';
+import {
+    Contract,
+    isError,
+    Wallet,
+    ZeroAddress,
+    type JsonRpcProvider,
+} from 'ethers';
 import { firstValueFrom } from 'rxjs';
 import { NoriSnapshot__factory } from '@nori-zk/ethereum-snapshot';
 import {
+    NoriProofRequestQueue__factory,
+    NoriTokenBridge__factory,
+    PAUSE_STATE_PAUSED,
+    PAUSE_STATE_UNPAUSED,
+    type NoriTokenBridge,
+} from '@nori-zk/ethereum-tempo-bridge';
+import {
+    applyPause,
     bothReady$,
     createConnections,
     getBridgeState,
     getProofQueueHead,
+    getProofRequestStateSnapshot,
+    getVerifiedRequestWitness,
+    ProofRequestState,
     type Connections,
-} from '@nori-zk/nori-bridge-solana-sdk';
-import { findStatePda } from '@nori-zk/nori-bridge-solana-sdk/program';
+} from '@nori-zk/nori-bridge-tempo-sdk';
 import {
-    checkpointInstruction,
-    createGuardInstruction,
-    decodeGuard,
-    findGuardAddress,
-    guardStatus,
+    Backstop__factory,
+    IGuardedToken__factory,
     ReadKind,
-    submitReadInstruction,
-    unlatchInstruction,
-} from '../backstop.js';
+    type Backstop,
+} from '@nori-zk/tempo-backstop';
+import {
+    ITIP20__factory,
+    NoriTempoTokenBridge__factory,
+    PAUSE_KEY,
+    type NoriTempoTokenBridge,
+} from '@nori-zk/tempo-token-bridge';
+import { guardStatusName } from '../backstop.js';
 import {
     fetchProvenSnapshot,
     type ProvenSnapshot,
@@ -29,84 +48,142 @@ import {
     queryOf,
     type GuardEntry,
     type KeeperConfig,
+    type MirrorEntry,
 } from './config.js';
 import {
-    connectSolana,
-    customErrorCode,
-    mintSupply,
+    connectTempo,
+    contractErrorName,
+    createProvider,
     RPC_TIMEOUT_MS,
-    type Solana,
-} from './solana.js';
+    type Tempo,
+} from './tempo.js';
 
 /** How long `snapshot` waits for its transaction to be mined. */
 const SNAPSHOT_WAIT_MS = 3 * 60_000;
 /** The sdk's requests have no timeout of their own; a hung one would stall the loop. */
 const PROVEN_SNAPSHOT_TIMEOUT_MS = 2 * 60_000;
 
-// Backstop error codes the keeper treats as "nothing to do" (pinned by
-// programs/backstop/tests/instruction_fixture.rs)
-const ERR_READ_NOT_NEWER = 6005;
-const ERR_CHECKPOINT_TOO_SOON = 6006;
+// Backstop errors the keeper treats as "nothing to do"
+const READ_NOT_NEWER = 'ReadNotNewer';
+const CHECKPOINT_TOO_SOON = 'CheckpointTooSoon';
+const NO_GUARD = 'NoGuard';
+// NoriTempoTokenBridge error the keeper treats as "nothing to do"
+const PAUSE_NOT_NEWER = 'PauseNotNewer';
+
+const PAUSABLE_ABI = ['function paused() view returns (bool)'];
+
+/** A `syncPause` transaction whose proof is not applied on Tempo yet. */
+interface PendingPause {
+    name: string;
+    ethToken: string;
+    syncPauseTxHash: string;
+}
 
 interface KeeperState {
     /** Snapshot transactions whose reads are not all submitted yet. */
     pending: string[];
+    /** Pause syncs whose proof is not applied to the mirror yet. */
+    pausesPending: PendingPause[];
 }
 
 export class Keeper {
     private constructor(
         private readonly config: KeeperConfig,
-        private readonly solana: Solana,
+        private readonly tempo: Tempo,
+        private readonly backstop: Backstop,
+        private readonly tempoBridge: NoriTempoTokenBridge,
         private readonly provider: JsonRpcProvider,
         private readonly connections: Connections
     ) {}
 
     /** The keeper signs through its own clients and reads through the sdk's connections. */
     static async connect(config: KeeperConfig): Promise<Keeper> {
-        const solana = await connectSolana(
-            config.solana.rpcUrl,
-            config.solana.keypair
-        );
-        // ethers' default is 5 min per request; a hung one would stall the loop
-        const request = new FetchRequest(config.ethereum.rpcUrl);
-        request.timeout = RPC_TIMEOUT_MS;
-        const provider = new JsonRpcProvider(request);
-        const [{ chainId }, genesisHash] = await Promise.all([
+        const key = process.env.TEMPO_PRIVATE_KEY;
+        if (!key) throw new Error('Missing env: TEMPO_PRIVATE_KEY');
+        const tempo = connectTempo(config.tempo.rpcUrl, key);
+        const provider = createProvider(config.ethereum.rpcUrl);
+        const [{ chainId }, { chainId: tempoChainId }] = await Promise.all([
             provider.getNetwork(),
-            solana.rpc.getGenesisHash().send(),
+            tempo.provider.getNetwork(),
         ]);
         const connections = createConnections({
             ethereum: {
                 expectedChainId: chainId,
                 http: { rpcUrl: config.ethereum.rpcUrl },
             },
-            solana: {
-                expectedGenesisHash: genesisHash,
-                http: { rpcUrls: [config.solana.rpcUrl] },
+            tempo: {
+                expectedChainId: tempoChainId,
+                http: { rpcUrl: config.tempo.rpcUrl },
             },
         });
         await withTimeout(
             firstValueFrom(bothReady$(connections)),
             RPC_TIMEOUT_MS,
-            'Ethereum and Solana connections'
+            'Ethereum and Tempo connections'
         );
-        return new Keeper(config, solana, provider, connections);
+        const backstop = Backstop__factory.connect(
+            config.tempo.backstop,
+            tempo.signer
+        );
+        const tempoBridge = NoriTempoTokenBridge__factory.connect(
+            config.tempo.bridge,
+            tempo.signer
+        );
+        return new Keeper(
+            config,
+            tempo,
+            backstop,
+            tempoBridge,
+            provider,
+            connections
+        );
     }
 
     private log(message: string) {
         console.log(`${new Date().toISOString()} ${message}`);
     }
 
-    private guardAddress(guard: GuardEntry) {
-        return findGuardAddress(guard.mint, this.solana.signer.address);
+    /** The Ethereum signer of snapshots and pause syncs. */
+    private ethereumSigner(): Wallet {
+        const key = process.env.ETH_PRIVATE_KEY;
+        if (!key) throw new Error('Missing env: ETH_PRIVATE_KEY');
+        return new Wallet(key, this.provider);
+    }
+
+    private tokenBridgeAddress(): string {
+        const { tokenBridge } = this.config.ethereum;
+        if (!tokenBridge)
+            throw new Error(
+                'Missing config: ethereum.tokenBridge (the NoriTokenBridge), needed with mirrors'
+            );
+        return tokenBridge;
+    }
+
+    private guardId(guard: GuardEntry) {
+        return this.backstop.guardIdOf(guard.token, this.tempo.signer.address);
+    }
+
+    /** The guard, or null when it does not exist. */
+    private async readGuard(guardId: string) {
+        try {
+            return await this.backstop.guard(guardId);
+        } catch (error) {
+            if (contractErrorName(error, this.backstop.interface) === NO_GUARD)
+                return null;
+            throw error;
+        }
     }
 
     private loadState(): KeeperState {
-        return existsSync(this.config.stateFile)
-            ? (JSON.parse(
-                  readFileSync(this.config.stateFile, 'utf8')
-              ) as KeeperState)
-            : { pending: [] };
+        return {
+            pending: [],
+            pausesPending: [],
+            ...(existsSync(this.config.stateFile)
+                ? (JSON.parse(
+                      readFileSync(this.config.stateFile, 'utf8')
+                  ) as Partial<KeeperState>)
+                : {}),
+        };
     }
 
     private saveState(state: KeeperState) {
@@ -118,35 +195,32 @@ export class Keeper {
 
     /** Creates each configured guard that does not exist yet; the keeper key is its admin. */
     async createGuards() {
-        const { noriProgram } = this.config.solana;
-        const [noriState] = await findStatePda({ programAddress: noriProgram });
-        if (!(await this.solana.accountData(noriState)))
+        const { bridge } = this.config.tempo;
+        if ((await this.tempo.provider.getCode(bridge)) === '0x')
             throw new Error(
-                `Nori program ${noriProgram} has no state at ${noriState}; initialize it before creating guards`
+                `No Nori bridge contract at ${bridge}; deploy it before creating guards`
             );
         for (const guard of this.config.guards) {
-            const address = await this.guardAddress(guard);
-            if (await this.solana.accountData(address)) {
-                this.log(`${guard.name}: guard ${address} exists`);
+            const guardId = await this.guardId(guard);
+            if (await this.readGuard(guardId)) {
+                this.log(`${guard.name}: guard ${guardId} exists`);
                 continue;
             }
-            const instruction = await createGuardInstruction({
-                admin: this.solana.signer.address,
-                mint: guard.mint,
-                config: guardConfigOf(this.config, guard),
-            });
-            await this.solana.send(instruction);
-            this.log(`${guard.name}: created guard ${address}`);
+            await this.tempo.send(
+                this.backstop.createGuard(
+                    guard.token,
+                    guardConfigOf(this.config, guard)
+                )
+            );
+            this.log(`${guard.name}: created guard ${guardId}`);
         }
     }
 
     /** One NoriSnapshot transaction covering every configured query. */
     async snapshot() {
-        const key = process.env.ETH_PRIVATE_KEY;
-        if (!key) throw new Error('Missing env: ETH_PRIVATE_KEY');
         const snapshot = NoriSnapshot__factory.connect(
             this.config.ethereum.noriSnapshot,
-            new Wallet(key, this.provider)
+            this.ethereumSigner()
         );
         const queries = new Map<string, { target: string; data: string }>();
         for (const guard of this.config.guards) {
@@ -172,10 +246,10 @@ export class Keeper {
         } catch (error) {
             if (isError(error, 'CALL_EXCEPTION')) {
                 // Reverted (e.g. the queue fee changed): it has no reads
+                const current = this.loadState();
                 this.saveState({
-                    pending: this.loadState().pending.filter(
-                        (hash) => hash !== tx.hash
-                    ),
+                    ...current,
+                    pending: current.pending.filter((hash) => hash !== tx.hash),
                 });
                 throw new Error(`snapshot ${tx.hash} reverted`);
             }
@@ -185,19 +259,19 @@ export class Keeper {
         }
     }
 
-    /** Records each guard's mint supply (skips guards checkpointed too recently). */
+    /** Records each guard's token supply (skips guards checkpointed too recently). */
     async checkpoint() {
         for (const guard of this.config.guards) {
             try {
-                await this.solana.send(
-                    checkpointInstruction({
-                        guard: await this.guardAddress(guard),
-                        mint: guard.mint,
-                    })
+                await this.tempo.send(
+                    this.backstop.checkpoint(await this.guardId(guard))
                 );
                 this.log(`${guard.name}: checkpoint`);
             } catch (error) {
-                if (customErrorCode(error) !== ERR_CHECKPOINT_TOO_SOON)
+                if (
+                    contractErrorName(error, this.backstop.interface) !==
+                    CHECKPOINT_TOO_SOON
+                )
                     this.log(
                         `${guard.name}: checkpoint failed: ${errorMessage(error)}`
                     );
@@ -207,7 +281,7 @@ export class Keeper {
 
     /**
      * Submits every pending snapshot's reads whose batch is proven. A read the
-     * program rejects is logged and dropped; one that fails in transit is
+     * contract rejects is logged and dropped; one that fails in transit is
      * retried next round. Neither blocks other guards or snapshots.
      */
     async submit(quiet = false) {
@@ -226,10 +300,9 @@ export class Keeper {
             else stillPending.push(snapshotTxHash);
         }
         // Keep what another keeper process (a CLI `snapshot`) added meanwhile
-        const added = this.loadState().pending.filter(
-            (hash) => !pending.includes(hash)
-        );
-        this.saveState({ pending: [...stillPending, ...added] });
+        const current = this.loadState();
+        const added = current.pending.filter((hash) => !pending.includes(hash));
+        this.saveState({ ...current, pending: [...stillPending, ...added] });
         if (stillPending.length && !quiet)
             this.log(
                 `${stillPending.length} snapshot(s) pending: waiting for a proof or retrying`
@@ -244,7 +317,7 @@ export class Keeper {
                 noriSnapshot: this.config.ethereum.noriSnapshot,
                 proofQueue: this.config.ethereum.proofQueue,
                 snapshotTxHash,
-                noriProgram: this.config.solana.noriProgram,
+                bridgeAddress: this.config.tempo.bridge,
             }),
             PROVEN_SNAPSHOT_TIMEOUT_MS,
             'reading the proof request'
@@ -276,25 +349,199 @@ export class Keeper {
         for (const [kind, query] of reads) {
             if (!query) continue;
             try {
-                await this.solana.send(
-                    submitReadInstruction({
-                        guard: await this.guardAddress(guard),
-                        mint: guard.mint,
-                        proofQueueBatch: snapshot.proofQueueBatch,
+                await this.tempo.send(
+                    this.backstop.submitRead(
+                        await this.guardId(guard),
                         kind,
-                        witness: snapshot.witnessFor(queryOf(query).queryId),
-                    })
+                        snapshot.proofQueueBatchIndex,
+                        snapshot.witnessFor(queryOf(query).queryId)
+                    )
                 );
             } catch (error) {
-                const code = customErrorCode(error);
-                // A program error is final for this read; only transport errors retry
-                if (code === undefined) throw error;
-                if (code !== ERR_READ_NOT_NEWER)
-                    this.log(
-                        `${guard.name}: read rejected (program error ${code}), dropped`
-                    );
+                const name = contractErrorName(error, this.backstop.interface);
+                // A contract error is final for this read; only transport errors retry
+                if (name === undefined) throw error;
+                if (name !== READ_NOT_NEWER)
+                    this.log(`${guard.name}: read rejected (${name}), dropped`);
             }
         }
+    }
+
+    /**
+     * Calls `NoriTokenBridge.syncPause` for each mirrored ERC-20 whose
+     * `paused()` differs from the pause state the bridge last synced, paying
+     * the queue fee, and keeps the transaction until `applyPauses` applies
+     * its proof to the mirror. A token never synced counts as synced
+     * unpaused, as a new mirror starts unpaused. Tokens without a mirror on
+     * Tempo are skipped (`status` names them).
+     */
+    async syncPauses() {
+        const mirrors = this.config.mirrors ?? [];
+        if (!mirrors.length) return;
+        const tokenBridge = NoriTokenBridge__factory.connect(
+            this.tokenBridgeAddress(),
+            this.ethereumSigner()
+        );
+        for (const mirror of mirrors) {
+            try {
+                await this.syncPause(tokenBridge, mirror);
+            } catch (error) {
+                this.log(
+                    `${mirror.name}: pause sync failed: ${errorMessage(error)}`
+                );
+            }
+        }
+    }
+
+    private async syncPause(tokenBridge: NoriTokenBridge, mirror: MirrorEntry) {
+        if ((await this.tempoBridge.mirrorOf(mirror.ethToken)) === ZeroAddress)
+            return;
+        // A sync sent but not mined yet has not moved the bridge's pause state
+        for (const pause of this.loadState().pausesPending) {
+            if (
+                pause.ethToken === mirror.ethToken &&
+                !(await this.provider.getTransactionReceipt(
+                    pause.syncPauseTxHash
+                ))
+            )
+                return;
+        }
+        const erc20 = new Contract(
+            mirror.ethToken,
+            PAUSABLE_ABI,
+            this.provider
+        );
+        const [paused, synced] = await Promise.all([
+            erc20.paused() as Promise<boolean>,
+            tokenBridge.pauseState(mirror.ethToken),
+        ]);
+        const wanted = paused ? PAUSE_STATE_PAUSED : PAUSE_STATE_UNPAUSED;
+        if (synced === wanted || (synced === 0n && !paused)) return;
+
+        const queue = NoriProofRequestQueue__factory.connect(
+            await tokenBridge.proofQueue(),
+            this.provider
+        );
+        const tx = await tokenBridge.syncPause(mirror.ethToken, {
+            value: await queue.proofRequestQueueFee(),
+        });
+        // Pending as soon as it is sent, as a snapshot is
+        const state = this.loadState();
+        state.pausesPending.push({
+            name: mirror.name,
+            ethToken: mirror.ethToken,
+            syncPauseTxHash: tx.hash,
+        });
+        this.saveState(state);
+        try {
+            const receipt = await tx.wait(1, SNAPSHOT_WAIT_MS);
+            this.log(
+                `${mirror.name}: syncPause ${tx.hash}: paused ${paused}, block ${receipt?.blockNumber}`
+            );
+        } catch (error) {
+            if (isError(error, 'CALL_EXCEPTION')) {
+                const current = this.loadState();
+                this.saveState({
+                    ...current,
+                    pausesPending: current.pausesPending.filter(
+                        (pause) => pause.syncPauseTxHash !== tx.hash
+                    ),
+                });
+                throw new Error(`syncPause ${tx.hash} reverted`);
+            }
+            this.log(
+                `${mirror.name}: syncPause ${tx.hash}: not mined after ${SNAPSHOT_WAIT_MS / 60_000} min; it is applied once it is`
+            );
+        }
+    }
+
+    /**
+     * Applies each pending pause sync whose batch is proven to its mirror
+     * with `NoriTempoTokenBridge.applyPause`. One a newer applied batch
+     * supersedes is dropped; another rejection is logged and dropped; a
+     * failure in transit is retried next round.
+     */
+    async applyPauses(quiet = false) {
+        const pending = this.loadState().pausesPending;
+        const stillPending: PendingPause[] = [];
+        for (const pause of pending) {
+            let done = false;
+            try {
+                done = await this.applyPendingPause(pause);
+            } catch (error) {
+                this.log(
+                    `${pause.name}: applyPause of ${pause.syncPauseTxHash} failed: ${errorMessage(error)}`
+                );
+            }
+            if (!done) stillPending.push(pause);
+        }
+        // Keep what another keeper process (a CLI `sync-pauses`) added meanwhile
+        const current = this.loadState();
+        const added = current.pausesPending.filter(
+            (pause) =>
+                !pending.some(
+                    (seen) => seen.syncPauseTxHash === pause.syncPauseTxHash
+                )
+        );
+        this.saveState({
+            ...current,
+            pausesPending: [...stillPending, ...added],
+        });
+        if (stillPending.length && !quiet)
+            this.log(
+                `${stillPending.length} pause sync(s) pending: waiting for a proof or retrying`
+            );
+    }
+
+    /** True once the pause state is applied to the mirror, or superseded. */
+    private async applyPendingPause(pause: PendingPause): Promise<boolean> {
+        const { proofQueue } = this.config.ethereum;
+        const { ethereum } = this.connections;
+        const state = await withTimeout(
+            getProofRequestStateSnapshot(this.connections, {
+                proofQueueAddress: proofQueue,
+                proofRequestTxHash: pause.syncPauseTxHash,
+                bridgeAddress: this.config.tempo.bridge,
+            }),
+            PROVEN_SNAPSHOT_TIMEOUT_MS,
+            'reading the pause proof request'
+        );
+        if (state.state !== ProofRequestState.ProofAvailable) return false;
+
+        const witness = await withTimeout(
+            getVerifiedRequestWitness(ethereum, state, proofQueue),
+            PROVEN_SNAPSHOT_TIMEOUT_MS,
+            'reading the pause witness'
+        );
+        if (
+            witness.value.target.toLowerCase() !==
+                this.tokenBridgeAddress().toLowerCase() ||
+            witness.value.collectionKeys[0].toLowerCase() !==
+                PAUSE_KEY.toLowerCase()
+        )
+            throw new Error(
+                `${pause.syncPauseTxHash} is not a pause request of the token bridge`
+            );
+
+        const { value } = witness.value;
+        try {
+            await applyPause(
+                this.tempo.signer,
+                this.config.tempo.bridge,
+                witness,
+                state.proofQueueBatchIndex
+            );
+            this.log(
+                `${pause.name}: mirror ${value === PAUSE_STATE_PAUSED ? 'paused' : 'unpaused'} (proof queue batch ${state.proofQueueBatchIndex})`
+            );
+        } catch (error) {
+            const name = contractErrorName(error, this.tempoBridge.interface);
+            // A contract error is final for this pause; only transport errors retry
+            if (name === undefined) throw error;
+            if (name !== PAUSE_NOT_NEWER)
+                this.log(`${pause.name}: applyPause rejected (${name}), dropped`);
+        }
+        return true;
     }
 
     /**
@@ -304,23 +551,17 @@ export class Keeper {
      */
     async unlatch() {
         for (const guard of this.config.guards) {
-            const address = await this.guardAddress(guard);
-            const data = await this.solana.accountData(address);
-            if (!data) {
-                this.log(`${guard.name}: no guard at ${address}`);
+            const guardId = await this.guardId(guard);
+            const state = await this.readGuard(guardId);
+            if (!state) {
+                this.log(`${guard.name}: no guard ${guardId}`);
                 continue;
             }
-            const state = decodeGuard(data);
             if (!state.tripped) {
                 this.log(`${guard.name}: not tripped`);
                 continue;
             }
-            await this.solana.send(
-                unlatchInstruction({
-                    admin: this.solana.signer.address,
-                    guard: address,
-                })
-            );
+            await this.tempo.send(this.backstop.unlatch(guardId));
             this.log(
                 `${guard.name}: unlatched (backing ${state.backing} at Ethereum block ${state.backingEthBlock})`
             );
@@ -334,12 +575,11 @@ export class Keeper {
 
     private async statusLines(): Promise<string[]> {
         const lines: string[] = [];
-        const now = BigInt(Math.floor(Date.now() / 1000));
-        const { noriProgram } = this.config.solana;
-        const { ethereum, solana } = this.connections;
+        const { bridge } = this.config.tempo;
+        const { ethereum, tempo } = this.connections;
         const [nori, requests] = await withTimeout(
             Promise.all([
-                getBridgeState(solana, noriProgram).catch((): null => null),
+                getBridgeState(tempo, bridge).catch((): null => null),
                 getProofQueueHead(ethereum, this.config.ethereum.proofQueue),
             ]),
             RPC_TIMEOUT_MS,
@@ -351,34 +591,63 @@ export class Keeper {
                     ` | ${nori.proofQueueBatchCount} batches | ${this.loadState().pending.length} snapshot(s) waiting`
             );
         } else {
-            lines.push(`nori: no state for ${noriProgram}`);
+            lines.push(`nori: no bridge state at ${bridge}`);
         }
         for (const guard of this.config.guards) {
-            const address = await this.guardAddress(guard);
-            const [guardData, mintData] = await Promise.all([
-                this.solana.accountData(address),
-                this.solana.accountData(guard.mint),
-            ]);
-            if (!guardData || !mintData) {
-                lines.push(`${guard.name}: no guard at ${address}`);
+            const guardId = await this.guardId(guard);
+            const state = await this.readGuard(guardId);
+            if (!state) {
+                lines.push(`${guard.name}: no guard ${guardId}`);
                 continue;
             }
-            const state = decodeGuard(guardData);
-            const supply = mintSupply(mintData);
+            const [status, supply] = await Promise.all([
+                this.backstop.status(guardId),
+                IGuardedToken__factory.connect(
+                    guard.token,
+                    this.tempo.provider
+                ).totalSupply(),
+            ]);
             lines.push(
-                `${guard.name}: ${guardStatus(state, supply, now)} | backing ${state.backing} | supply ${supply}` +
+                `${guard.name}: ${guardStatusName(status)} | backing ${state.backing} | supply ${supply}` +
                     ` | Ethereum block ${state.backingEthBlock} | paused ${state.paused}` +
                     (state.tripped
                         ? ` | tripped at block ${state.tripEthBlock}, deficit ${state.tripDeficit}`
                         : '')
             );
         }
+        for (const mirror of this.config.mirrors ?? []) {
+            const mirrorAddress = await this.tempoBridge.mirrorOf(
+                mirror.ethToken
+            );
+            if (mirrorAddress === ZeroAddress) {
+                lines.push(
+                    `${mirror.name}: no mirror of ${mirror.ethToken} on Tempo; register it (register-mirror)`
+                );
+                continue;
+            }
+            const [paused, mirrorPaused] = await Promise.all([
+                new Contract(
+                    mirror.ethToken,
+                    PAUSABLE_ABI,
+                    this.provider
+                ).paused() as Promise<boolean>,
+                ITIP20__factory.connect(
+                    mirrorAddress,
+                    this.tempo.provider
+                ).paused(),
+            ]);
+            lines.push(
+                `${mirror.name}: ERC-20 paused ${paused} | mirror ${mirrorAddress} paused ${mirrorPaused}` +
+                    ` | ${this.loadState().pausesPending.filter((pause) => pause.ethToken === mirror.ethToken).length} pause sync(s) waiting`
+            );
+        }
         return lines;
     }
 
     /**
-     * Checkpoints, snapshots and submits on the configured intervals, forever,
-     * and prints each status line when it changes. One job at a time, so jobs
+     * Checkpoints, snapshots and submits on the configured intervals, syncs
+     * and applies the mirrors' pause states every round, forever, and prints
+     * each status line when it changes. One job at a time, so jobs
      * never race on the state file.
      */
     async run() {
@@ -404,6 +673,8 @@ export class Keeper {
                 ]);
             }
             jobs.push(['submit', () => this.submit(true)]);
+            jobs.push(['sync-pauses', () => this.syncPauses()]);
+            jobs.push(['apply-pauses', () => this.applyPauses(true)]);
             for (const [name, job] of jobs) {
                 try {
                     await job();

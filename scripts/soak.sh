@@ -7,7 +7,7 @@
 # Usage: scripts/soak.sh [MINUTES=600] [OUT=soak-<UTC time>]
 #   SOAK_CONFIG=path   another keeper config; skips the shadow setup
 #
-# Once, if missing: deploys the shadow lockbox (Sepolia) and mint (devnet),
+# Once, if missing: deploys the shadow lockbox (Sepolia) and token (Moderato),
 # then creates the guards. Reads .env and the deploy outputs like the keeper.
 
 set -euo pipefail
@@ -23,8 +23,8 @@ cd "$REPO"
 if [ -z "${SOAK_CONFIG:-}" ]; then
     grep -qs '^NORI_ETH_SHADOW_LOCKBOX_ADDRESS=' ethereum/.env.nori-eth-demo ||
         npm run -s deploy-demo -w ethereum -- 116723.52 --env-var NORI_ETH_SHADOW_LOCKBOX_ADDRESS
-    grep -qs '^BACKSTOP_SHADOW_MINT=' .env.nori-sol-demo ||
-        MINT_VAR=BACKSTOP_SHADOW_MINT scripts/deploy-devnet.sh
+    grep -qs '^BACKSTOP_SHADOW_TOKEN=' tempo/.env.nori-tempo-demo ||
+        TOKEN_VAR=BACKSTOP_SHADOW_TOKEN scripts/deploy-moderato.sh
     (cd client && node --experimental-wasm-modules build/bin/keeper.js create-guards "$CONFIG")
 fi
 

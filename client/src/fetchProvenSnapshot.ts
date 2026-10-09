@@ -1,4 +1,3 @@
-import { address, type Address } from '@solana/kit';
 import {
     ProofRequestState,
     forCalls,
@@ -6,8 +5,8 @@ import {
     getProofRequestWitness,
     type Ethereum,
     type EthereumProvider,
-    type Solana,
-} from '@nori-zk/nori-bridge-solana-sdk';
+    type Tempo,
+} from '@nori-zk/nori-bridge-tempo-sdk';
 import {
     parseSnapshotEvent,
     snapshotResultWitness,
@@ -17,13 +16,13 @@ import {
 
 export interface ProvenSnapshotRequest {
     /** The sdk's chains, from `createConnections`. */
-    connections: { ethereum: Ethereum; solana: Solana };
+    connections: { ethereum: Ethereum; tempo: Tempo };
     noriSnapshot: string;
     proofQueue: string;
     /** The transaction that called `NoriSnapshot.snapshot`. */
     snapshotTxHash: string;
-    /** The Nori program; defaults to the sdk's. */
-    noriProgram?: Address;
+    /** The `NoriTempoTokenBridge` that proves the queue. */
+    bridgeAddress: string;
 }
 
 export type ProvenSnapshot =
@@ -31,8 +30,9 @@ export type ProvenSnapshot =
     | {
           proven: true;
           event: SnapshotEvent;
-          proofQueueBatch: Address;
-          /** The witness a Solana program verifies for one query's result. */
+          /** The index of the committed batch holding the snapshot. */
+          proofQueueBatchIndex: bigint;
+          /** The witness a Tempo contract verifies for one query's result. */
           witnessFor(queryId: string): SnapshotResultWitnessArgs;
       };
 
@@ -41,7 +41,7 @@ const fetchReceipt = (provider: EthereumProvider, hash: string) =>
 
 /**
  * A snapshot transaction and, once Nori has proven its batch, everything
- * needed to verify any of its results: the batch account, and the request's
+ * needed to verify any of its results: the batch index, and the request's
  * path in it (fetched once, shared by every query).
  */
 export async function fetchProvenSnapshot(
@@ -59,7 +59,7 @@ export async function fetchProvenSnapshot(
     const state = await getProofRequestStateSnapshot(request.connections, {
         proofQueueAddress: request.proofQueue,
         proofRequestTxHash: request.snapshotTxHash,
-        programAddress: request.noriProgram,
+        bridgeAddress: request.bridgeAddress,
     });
     if (state.state !== ProofRequestState.ProofAvailable)
         return { proven: false, event };
@@ -72,7 +72,7 @@ export async function fetchProvenSnapshot(
     return {
         proven: true,
         event,
-        proofQueueBatch: address(state.proofQueueBatchAddress),
+        proofQueueBatchIndex: state.proofQueueBatchIndex,
         witnessFor: (queryId) =>
             snapshotResultWitness(
                 request.noriSnapshot,

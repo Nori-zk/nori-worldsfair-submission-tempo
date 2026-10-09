@@ -1,4 +1,4 @@
-import type { NoriBridgeInfraTransitionState } from '@nori-zk/nori-bridge-solana-sdk';
+import type { NoriBridgeInfraTransitionState } from '@nori-zk/nori-bridge-tempo-sdk';
 
 /** A node of Nori's bridge infra transition graph. */
 export type NoriBridgeInfraStage = NoriBridgeInfraTransitionState['node'];
@@ -12,17 +12,17 @@ export const NORI_BRIDGE_INFRA_STAGE_TEXT: Record<NoriBridgeInfraStage, string> 
     BridgeHeadAdvanced: 'Waiting for the next Ethereum finality',
     BridgeHeadJobCreated: 'Proving light client inside zkVM',
     BridgeHeadJobFailed: 'Light client proof failed, proving again',
-    BridgeHeadJobSucceeded: 'Light client proof ready, settling on Solana',
-    EthProcessorTransactionSubmitting: 'Settling proof on Solana',
-    EthProcessorTransactionSubmitFailed: 'Settling proof on Solana failed, retrying',
-    EthProcessorTransactionSubmitSucceeded: 'Waiting for Solana confirmation',
-    EthProcessorTransactionFinalizationFailed: 'Proof failed to be confirmed on Solana, retrying',
+    BridgeHeadJobSucceeded: 'Light client proof ready, settling on Tempo',
+    EthProcessorTransactionSubmitting: 'Settling proof on Tempo',
+    EthProcessorTransactionSubmitFailed: 'Settling proof on Tempo failed, retrying',
+    EthProcessorTransactionSubmitSucceeded: 'Waiting for Tempo confirmation',
+    EthProcessorTransactionFinalizationFailed: 'Proof failed to be confirmed on Tempo, retrying',
     EthProcessorTransactionFinalizationSucceeded:
-        'Proof confirmed on Solana, waiting for the next Ethereum finality',
+        'Proof confirmed on Tempo, waiting for the next Ethereum finality',
 };
 
 /**
- * The loop's steps in order, ending at the proof confirmed on Solana.
+ * The loop's steps in order, ending at the proof confirmed on Tempo.
  * `BridgeHeadAdvanced` is the loop's start, before the first step: waiting
  * for the Ethereum finality that starts the next job.
  */

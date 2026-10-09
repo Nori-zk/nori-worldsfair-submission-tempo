@@ -2,12 +2,7 @@ import { Component, Inject, RxElement, state } from '@yaw-rx/core';
 import { RxIf } from '@yaw-rx/core/directives/rx-if';
 import { RxFor } from '@yaw-rx/core/directives/rx-for';
 import { combineLatest, map, type Observable } from 'rxjs';
-import {
-    ethereumLogo,
-    type ListedToken,
-    TokenListService,
-    tokenIcon,
-} from '@nori-zk/solana-web-ui';
+import { ethereumLogo, type ListedToken, TokenListService, tokenIcon } from '@nori-zk/tempo-web-ui';
 import { TOKEN_CHOSEN } from './token-option.component.js';
 import './token-option.component.js';
 import styles from './token-select.component.css';

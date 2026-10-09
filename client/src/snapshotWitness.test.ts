@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { getBytes } from 'ethers';
+import { SNAPSHOT_COLLECTION_KEYS } from '@nori-zk/tempo-backstop';
 import {
     snapshotResultWitness,
     type SnapshotEvent,
@@ -67,11 +67,6 @@ function requestWitnessOf(requestId: number) {
     };
 }
 
-const bytes = (words: Array<readonly [Uint8Array]>) =>
-    words.map(([w]) => Buffer.from(w).toString('hex'));
-const hexes = (words: string[]) =>
-    words.map((w) => Buffer.from(getBytes(w)).toString('hex'));
-
 test('rebuilds the drained snapshot witness from its event and batch path', () => {
     const drained = vectors.snapshots[1];
     assert.ok(drained);
@@ -89,19 +84,17 @@ test('rebuilds the drained snapshot witness from its event and batch path', () =
         requestWitnessOf(drained.requestId)
     );
 
-    assert.deepEqual(bytes(witness.request.path), hexes(request.path));
+    assert.deepEqual(witness.request.path, request.path);
     assert.equal(witness.request.index, BigInt(request.index));
-    assert.equal(witness.request.value.collectionKeysCount, 2);
+    assert.equal(witness.request.value.target, vectors.noriSnapshot);
     assert.equal(
-        Buffer.from(witness.request.value.value[0]).toString('hex'),
-        Buffer.from(getBytes(request.value).reverse()).toString('hex')
+        witness.request.value.collectionKeysCount,
+        SNAPSHOT_COLLECTION_KEYS
     );
+    assert.equal(witness.request.value.value, BigInt(request.value));
     assert.equal(witness.resultIndex, balance.index);
-    assert.deepEqual(bytes(witness.resultPath), hexes(balance.path));
-    assert.equal(
-        Buffer.from(witness.result[0]).toString('hex'),
-        Buffer.from(getBytes(balance.result)).toString('hex')
-    );
+    assert.deepEqual(witness.resultPath, balance.path);
+    assert.equal(witness.result, balance.result);
 });
 
 test('refuses a batch path that belongs to another snapshot', () => {
@@ -128,33 +121,5 @@ test('refuses a batch path that belongs to another snapshot', () => {
                 requestWitnessOf(drained.requestId)
             ),
         /not in this snapshot/
-    );
-});
-
-test('encodes submit_read exactly as the Rust program does', async () => {
-    const { encodeSubmitRead, ReadKind } = await import('./backstop.js');
-    const drained = vectors.snapshots[1];
-    assert.ok(drained);
-    const balance = drained.results.find((r) => r.name === 'lockbox-balance');
-    assert.ok(balance);
-    const witness = snapshotResultWitness(
-        vectors.noriSnapshot,
-        eventOf(drained),
-        balance.queryId,
-        requestWitnessOf(drained.requestId)
-    );
-    const fixture = readFileSync(
-        new URL(
-            '../../test-vectors/backstop/submit-read-kelp-drained.hex',
-            import.meta.url
-        ),
-        'utf8'
-    ).trim();
-
-    assert.equal(
-        Buffer.from(encodeSubmitRead(ReadKind.Backing, witness)).toString(
-            'hex'
-        ),
-        fixture
     );
 });

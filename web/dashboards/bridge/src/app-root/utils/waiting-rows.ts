@@ -6,13 +6,13 @@ import {
     NORI_JOB_STAGES,
     sortWaitingProofRequests,
     type EthereumFinality,
-} from '@nori-zk/nori-bridge-solana-sdk';
+} from '@nori-zk/nori-bridge-tempo-sdk';
 import {
     NORI_BRIDGE_INFRA_STAGE_TEXT,
     type NoriBridgeInfraFinality,
     type NoriBridgeInfraStage,
     type NoriBridgeInfraState,
-} from '@nori-zk/solana-web-ui';
+} from '@nori-zk/tempo-web-ui';
 import { type BatchesView } from '../ystate/bridge-batches.js';
 import { asciiBar, timeLeft, UNKNOWN_BAR } from './ascii.js';
 import { blockText, idRange } from './format.js';
@@ -78,7 +78,7 @@ const isShownStage = (name: string): name is NoriBridgeInfraStage =>
  * Ethereum finality, those finalized and scheduled for a later job, and,
  * while Nori's websocket says which job it is running, the requests in that
  * job. Each row's bar and time left count towards its next step: finality,
- * or the commit on Solana of the job its requests are in.
+ * or the commit on Tempo of the job its requests are in.
  *
  * @param input The view, Nori's state, timings and finality, and now.
  * @returns The rows.

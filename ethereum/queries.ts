@@ -43,7 +43,7 @@ export const MAINNET = {
 } as const;
 
 /**
- * Backing and pause facts for the Ethereum-bridged assets on Solana that the
+ * Backing and pause facts for the Ethereum-bridged assets that the
  * guards check (NORI-backstop-spec.md §2.2).
  */
 export const MAINNET_SNAPSHOT_QUERIES: readonly SnapshotQuery[] = [
@@ -82,8 +82,7 @@ export const MAINNET_SNAPSHOT_QUERIES: readonly SnapshotQuery[] = [
         target: MAINNET.USDS,
         signature: 'balanceOf(address)',
         args: [MAINNET.SKY_USDS_OFT_ADAPTER],
-        description:
-            'USDS locked in the Sky LayerZero OFT adapter, which serves only Solana',
+        description: 'USDS locked in the Sky LayerZero OFT adapter',
     },
     {
         name: 'usds-lockbox-paused',
@@ -97,8 +96,7 @@ export const MAINNET_SNAPSHOT_QUERIES: readonly SnapshotQuery[] = [
         target: MAINNET.AAVE,
         signature: 'balanceOf(address)',
         args: [MAINNET.AAVE_NTT_MANAGER],
-        description:
-            'AAVE locked in the Wormhole NTT locking hub, which serves only Solana',
+        description: 'AAVE locked in the Wormhole NTT locking hub',
     },
     {
         name: 'aave-ntt-hub-paused',
@@ -112,8 +110,7 @@ export const MAINNET_SNAPSHOT_QUERIES: readonly SnapshotQuery[] = [
         target: MAINNET.UNI,
         signature: 'balanceOf(address)',
         args: [MAINNET.UNI_NTT_MANAGER],
-        description:
-            'UNI locked in the Wormhole NTT locking hub, which serves only Solana',
+        description: 'UNI locked in the Wormhole NTT locking hub',
     },
     {
         name: 'uni-ntt-hub-paused',

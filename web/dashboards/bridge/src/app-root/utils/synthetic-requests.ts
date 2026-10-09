@@ -1,6 +1,6 @@
 // TEMPORARY: synthetic waiting requests to preview populated rows. Remove before committing.
-import { type EnqueuedProofRequest } from '@nori-zk/nori-bridge-solana-sdk';
-import { type NoriBridgeInfraState } from '@nori-zk/solana-web-ui';
+import { type EnqueuedProofRequest } from '@nori-zk/nori-bridge-tempo-sdk';
+import { type NoriBridgeInfraState } from '@nori-zk/tempo-web-ui';
 
 /** Whether the page asked for synthetic rows (`?synthetic`). */
 export const SYNTHETIC = new URLSearchParams(window.location.search).has('synthetic');

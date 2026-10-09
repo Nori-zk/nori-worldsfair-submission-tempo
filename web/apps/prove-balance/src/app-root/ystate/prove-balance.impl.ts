@@ -24,8 +24,8 @@ import {
     forCalls,
     type ProofRequestConnections,
     waitingOnChanged$,
-} from '@nori-zk/nori-bridge-solana-sdk';
-import { dataOnEntry$, type StartedMachine, stateOf$ } from '@nori-zk/nori-bridge-solana-sdk/utils';
+} from '@nori-zk/nori-bridge-tempo-sdk';
+import { dataOnEntry$, type StartedMachine, stateOf$ } from '@nori-zk/nori-bridge-tempo-sdk/utils';
 import { encodeQueryData, NoriSnapshot__factory } from '@nori-zk/ethereum-snapshot';
 import { ProveBalanceGraph, type ProveBalanceState } from './prove-balance.js';
 
@@ -262,7 +262,7 @@ function sentWith<TOutcome extends SendOutcome['outcome']>(
 /**
  * Starts the prove balance machine at `editing` with `initial`.
  *
- * @param connections The Ethereum and Solana chains; reads go through Ethereum's, the wallet signs.
+ * @param connections The Ethereum and Tempo chains; reads go through Ethereum's, the wallet signs.
  * @param snapshotAddress The `NoriSnapshot` address.
  * @param initial The asset and holder the form starts with.
  * @returns

@@ -28,8 +28,8 @@ import {
     getProofRequestsByTarget,
     type ProofRequestHistoryAddresses,
     waitingOnChanged$,
-} from '@nori-zk/nori-bridge-solana-sdk';
-import { dataOnEntry$, type StartedMachine, stateOf$ } from '@nori-zk/nori-bridge-solana-sdk/utils';
+} from '@nori-zk/nori-bridge-tempo-sdk';
+import { dataOnEntry$, type StartedMachine, stateOf$ } from '@nori-zk/nori-bridge-tempo-sdk/utils';
 import {
     type BatchesView,
     type ShownBatch,
@@ -49,7 +49,7 @@ const RETRY_INITIAL_MS = 1000;
 /** The longest wait between reads after failures. */
 const RETRY_MAX_MS = 30_000;
 
-/** Where the dashboard reads from: the queue, the program and the queue's deploy block. */
+/** Where the dashboard reads from: the queue, the bridge and the queue's deploy block. */
 export interface BatchesAddresses extends ProofRequestHistoryAddresses {
     /** The first block to read proof requests from. */
     proofQueueDeployBlock: number;
@@ -64,7 +64,7 @@ type ReadOutcome =
 /**
  * The indices of the newest batches, newest first.
  *
- * @param batchCount How many batches the program holds.
+ * @param batchCount How many batches the bridge holds.
  * @returns Up to `BATCH_COUNT` indices.
  */
 const newestIndices = (batchCount: bigint): bigint[] =>
@@ -79,11 +79,10 @@ const newestIndices = (batchCount: bigint): bigint[] =>
  * from Ethereum newest first, a page at a time, until `BATCH_COUNT` batches
  * are found or none are left.
  *
- * @param connections The Ethereum and Solana chains.
- * @param addresses The queue, program and deploy block.
+ * @param connections The Ethereum and Tempo chains.
+ * @param addresses The queue, bridge and deploy block.
  * @param target The contract.
  * @param queueCursor The first request id no batch covers yet.
- * @param batchCount How many batches the program holds.
  * @returns Each batch's index and the contract's request ids in it.
  */
 async function targetBatches(
@@ -91,7 +90,6 @@ async function targetBatches(
     addresses: BatchesAddresses,
     target: string,
     queueCursor: bigint,
-    batchCount: bigint,
 ): Promise<Map<bigint, bigint[]>> {
     const byBatch = new Map<bigint, bigint[]>();
     let after;
@@ -111,10 +109,9 @@ async function targetBatches(
             .map(({ requestId }) => requestId)
             .filter((requestId) => requestId < queueCursor);
         const found = await getProofQueueBatchesForRequests(
-            connections.solana,
+            connections.tempo,
             proven,
-            batchCount,
-            addresses.programAddress,
+            addresses.bridgeAddress,
         );
         for (const requestId of proven) {
             const index = found.get(requestId)?.proofQueueBatchIndex;
@@ -132,8 +129,8 @@ async function targetBatches(
  * Reads the view: the newest batches (all of them, or the contract's), the
  * requests no batch covers yet, and Ethereum's finalized block.
  *
- * @param connections The Ethereum and Solana chains.
- * @param addresses The queue, program and deploy block.
+ * @param connections The Ethereum and Tempo chains.
+ * @param addresses The queue, bridge and deploy block.
  * @param target The contract to show, or `''` for every contract.
  * @returns The view.
  */
@@ -142,22 +139,22 @@ async function readView(
     addresses: BatchesAddresses,
     target: string,
 ): Promise<BatchesView> {
-    const { ethereum, solana } = connections;
-    const state = await getBridgeState(solana, addresses.programAddress);
+    const { ethereum, tempo } = connections;
+    const state = await getBridgeState(tempo, addresses.bridgeAddress);
     const { queueCursor, proofQueueBatchCount: batchCount } = state;
 
     const matching =
         target === ''
             ? undefined
-            : await targetBatches(connections, addresses, target, queueCursor, batchCount);
+            : await targetBatches(connections, addresses, target, queueCursor);
     const indices = matching
         ? [...matching.keys()].sort((a, b) => (a < b ? 1 : -1))
         : newestIndices(batchCount);
     const newest = batchCount > 0n ? [batchCount - 1n] : [];
     const summaries = await getProofQueueBatchSummaries(
-        solana,
+        tempo,
         [...new Set([...newest, ...indices])],
-        addresses.programAddress,
+        addresses.bridgeAddress,
     );
     const byIndex = new Map(summaries.map((summary) => [summary.proofQueueBatchIndex, summary]));
     const batches = indices.flatMap((index): ShownBatch[] => {
@@ -183,8 +180,8 @@ async function readView(
  * Reads the view once. A connection that is not ready is a lost
  * connection, naming the chains; any other failure is the read's own.
  *
- * @param connections The Ethereum and Solana chains.
- * @param addresses The queue, program and deploy block.
+ * @param connections The Ethereum and Tempo chains.
+ * @param addresses The queue, bridge and deploy block.
  * @param target The contract to show, or `''` for every contract.
  * @returns How the read ended, once.
  */
@@ -238,8 +235,8 @@ function withOutcome<TOutcome extends ReadOutcome['outcome']>(
 /**
  * Starts the batches machine at `loading` for one contract, or every one.
  *
- * @param connections The Ethereum and Solana chains, and Nori's websocket.
- * @param addresses The queue, program and deploy block.
+ * @param connections The Ethereum and Tempo chains, and Nori's websocket.
+ * @param addresses The queue, bridge and deploy block.
  * @param target The contract to show, or `''` for every contract.
  * @returns
  *   - `bridgeBatches`: the running machine.

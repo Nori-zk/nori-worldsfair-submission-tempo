@@ -5,7 +5,7 @@ import {
     createUnprocessedProofRequestStateMachine,
     type ProofRequestStateNodeUnion,
     type UnprocessedProofRequestStateNodeUnion,
-} from '@nori-zk/nori-bridge-solana-sdk';
+} from '@nori-zk/nori-bridge-tempo-sdk';
 import { ConnectionsService } from './connections.service.js';
 import { NoriBridgeInfraService } from './nori-bridge-infra.service.js';
 
@@ -30,7 +30,7 @@ export class ProofProgressService {
     private readonly followed = new Map<string, FollowedProof & { close: () => void }>();
 
     /**
-     * @param connections The connections, Nori's websocket among them, and the queue and program addresses.
+     * @param connections The connections, Nori's websocket among them, and the queue and bridge addresses.
      * @param noriBridgeInfra Nori's bridge state.
      */
     constructor(

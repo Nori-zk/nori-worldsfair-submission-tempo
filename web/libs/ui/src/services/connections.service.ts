@@ -17,15 +17,18 @@ import {
 import {
     createConnections,
     DEFAULT_NORI_WEBSOCKET_URL,
+    PUBLIC_TEMPO_NETWORKS,
     type Connections,
     type ConnectionsOptions as TransportOptions,
+    type EthereumHealth,
     type EthereumWalletState,
+    type HttpConnectionState,
     type ProofRequestHistoryAddresses,
-} from '@nori-zk/nori-bridge-solana-sdk';
+} from '@nori-zk/nori-bridge-tempo-sdk';
 
 /** The options `ConnectionsService` starts the connections with. */
 export type ConnectionsOptions = TransportOptions & {
-    /** The proof request queue and the Solana program the reading machines read. */
+    /** The proof request queue and the Tempo bridge the reading machines read. */
     proofRequests: ProofRequestHistoryAddresses;
 };
 
@@ -33,13 +36,13 @@ export type ConnectionsOptions = TransportOptions & {
 export const PROOF_REQUEST_CONNECTIONS_OPTIONS = Symbol('PROOF_REQUEST_CONNECTIONS_OPTIONS');
 
 /**
- * The network, the Ethereum wallet, the Solana RPC that every proof request
+ * The network, the Ethereum wallet, the Tempo RPC that every proof request
  * read goes through, and Nori's websocket, all from `createConnections`. One
  * instance per providing component; the connections close with it.
  */
 @Injectable([PROOF_REQUEST_CONNECTIONS_OPTIONS])
 export class ConnectionsService {
-    /** Everything `createConnections` opened: network, Ethereum, Solana and Nori. */
+    /** Everything `createConnections` opened: network, Ethereum, Tempo and Nori. */
     readonly connections: Connections;
     /**
      * The wallet's first account, or an empty string while it has shared
@@ -51,7 +54,7 @@ export class ConnectionsService {
     private readonly accountsShared$ = new Subject<unknown>();
 
     /**
-     * @param options The Ethereum chain, the Solana cluster, Nori's websocket, the queue and program, and optional timings.
+     * @param options The Ethereum chain, the Tempo chain, Nori's websocket, the queue and bridge, and optional timings.
      */
     constructor(readonly options: ConnectionsOptions) {
         this.connections = createConnections(options);
@@ -100,24 +103,34 @@ export class ConnectionsService {
         );
     }
 
-    /** Whether reads can run on both chains: Ethereum's RPC or wallet, and Solana's http, are `ready`. */
+    /** Tempo's http connection machine's states. */
+    get tempoHttpState$(): Observable<HttpConnectionState<EthereumHealth>> {
+        return this.connections.tempo.http.connection?.state$ ?? EMPTY;
+    }
+
+    /** Whether reads can run on both chains: Ethereum's RPC or wallet, and Tempo's http, are `ready`. */
     get ready$(): Observable<boolean> {
         return combineLatest([
             this.ethereumHttpReady$,
             this.walletState$,
-            this.connections.solana.http.connection.state$,
+            this.tempoHttpState$,
         ]).pipe(
             map(
-                ([ethereumHttp, wallet, solana]) =>
-                    (ethereumHttp || wallet.node === 'ready') && solana.node === 'ready',
+                ([ethereumHttp, wallet, tempo]) =>
+                    (ethereumHttp || wallet.node === 'ready') && tempo.node === 'ready',
             ),
             distinctUntilChanged(),
         );
     }
 
-    /** The public cluster Solana reads go to, or `custom` for the app's own endpoints. */
-    get solanaCluster(): string {
-        return 'cluster' in this.options.solana ? this.options.solana.cluster : 'custom';
+    /** The public Tempo network reads go to, or its chain id for any other chain. */
+    get tempoNetwork(): string {
+        const { tempo } = this.options;
+        if ('network' in tempo) return tempo.network;
+        const known = Object.entries(PUBLIC_TEMPO_NETWORKS).find(
+            ([, endpoints]) => endpoints.chainId === tempo.expectedChainId,
+        );
+        return known?.[0] ?? `chain ${tempo.expectedChainId.toString()}`;
     }
 
     /** Nori's websocket URL. */
@@ -140,7 +153,7 @@ export class ConnectionsService {
     }
 
     /**
-     * Closes the network, Ethereum, Solana and Nori connections.
+     * Closes the network, Ethereum, Tempo and Nori connections.
      * @returns {void}
      */
     onDestroy(): void {

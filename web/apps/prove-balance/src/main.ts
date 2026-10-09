@@ -1,5 +1,5 @@
 import { bootstrap } from '@yaw-rx/core';
-import { brandStyles } from '@nori-zk/solana-web-ui';
+import { brandStyles } from '@nori-zk/tempo-web-ui';
 import { AppRoot } from './app-root.js';
 import globalStyles from './main.css';
 

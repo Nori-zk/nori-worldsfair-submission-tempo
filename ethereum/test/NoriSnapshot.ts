@@ -2,19 +2,27 @@
 /// <reference types="@nomicfoundation/hardhat-ethers-chai-matchers" />
 import { expect } from 'chai';
 import hre from 'hardhat';
-import { NoriProofRequestQueue__factory } from '@nori-zk/ethereum-solana-bridge';
+import {
+    NoriProofRequestQueue__factory,
+    PROOF_REQUEST_QUEUE_FEE_GRANULARITY_WEI,
+} from '@nori-zk/ethereum-tempo-bridge';
 import {
     merkle_root_from_path,
     request_witness,
-} from '@nori-zk/ethereum-solana-proof-queue-utils-glam';
+} from '@nori-zk/ethereum-tempo-proof-queue-utils-glam';
 import {
     NoriSnapshot__factory,
     SnapshotTargetMock__factory,
 } from '../types/ethers-contracts/index.js';
 import { encodeQueryData, queryIdOf } from '../queries.js';
 import {
+    COMMITMENTS_SLOT_INDEX,
     MAX_QUERIES,
+    RESULT_LEAF_PREFIX,
     SENTINEL,
+    SNAPSHOT_COUNT_SLOT_INDEX,
+} from '../contracts/NoriSnapshot.const.js';
+import {
     commitmentWordOf,
     parseTimeKey,
     resultLeafOf,
@@ -26,12 +34,7 @@ import {
 } from '../snapshotProof.js';
 const { ethers } = await hre.network.getOrCreate();
 
-const PROOF_REQUEST_QUEUE_FEE = 200n * 10n ** 12n; // 0.0002 ETH
-
-// Proof-critical storage layout: every enqueued slotKey must point at the
-// word the snapshot wrote.
-const COMMITMENTS_SLOT_INDEX = 0n;
-const SNAPSHOT_COUNT_SLOT_INDEX = 1n;
+const PROOF_REQUEST_QUEUE_FEE = 200n * PROOF_REQUEST_QUEUE_FEE_GRANULARITY_WEI; // 0.0002 ETH
 
 const abi = ethers.AbiCoder.defaultAbiCoder();
 
@@ -237,7 +240,7 @@ describe('NoriSnapshot', () => {
             }
         });
 
-        it('Should build result paths that nori-hash verifies, so Solana can reuse its Merkle check', async function () {
+        it('Should build result paths that nori-hash verifies', async function () {
             for (const count of [1, 2, 3, 5, 8, 13]) {
                 const queryIds = Array.from({ length: count }, (_unused, k) =>
                     ethers.keccak256(ethers.toBeHex(k + 100, 32))
@@ -595,7 +598,7 @@ describe('NoriSnapshot', () => {
     });
 
     // -----------------------------------------------------------
-    // What a Solana consumer verifies
+    // What a Tempo consumer verifies
     // -----------------------------------------------------------
     describe('Proof request leaf and results', function () {
         it('Should rebuild every leaf from the queue and storage alone, and verify each result against it', async function () {
@@ -652,7 +655,7 @@ describe('NoriSnapshot', () => {
                 })
             ).to.equal(requestWitness.root);
 
-            // 2. The proof request leaf a Solana consumer checks
+            // 2. The proof request leaf a Tempo consumer checks
             const leaf = leaves[1];
             expect(leaf.target).to.equal(await snapshot.getAddress());
             expect(leaf.collectionKeysCount).to.equal(2);
@@ -770,7 +773,9 @@ describe('NoriSnapshot', () => {
             const queryId = ethers.keccak256('0x01');
             const result = word(5n);
 
-            expect(await snapshot.RESULT_LEAF_PREFIX()).to.equal('0x00');
+            expect(await snapshot.RESULT_LEAF_PREFIX()).to.equal(
+                RESULT_LEAF_PREFIX
+            );
             expect(await snapshot.resultLeafOf(queryId, result)).to.equal(
                 ethers.sha256(ethers.concat(['0x00', queryId, result]))
             );

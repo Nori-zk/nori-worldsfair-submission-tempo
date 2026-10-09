@@ -2,8 +2,6 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { getAddress } from 'ethers';
-import { address, type Address } from '@solana/kit';
-import type { SolanaCluster } from '@nori-zk/nori-bridge-solana-sdk';
 
 /** The constants every app and dashboard under web/ is built with. */
 export interface WebEnv {
@@ -19,28 +17,21 @@ export interface WebEnv {
         /** The `NoriSnapshot` address. */
         snapshotAddress: string;
     };
-    solana: {
-        /** The public cluster read through its public endpoint. */
-        cluster: SolanaCluster;
-        /** The Nori program that commits proof queue batches. */
-        programAddress: Address;
+    tempo: {
+        /** The Tempo chain the reads expect. */
+        chainId: number;
+        /** Tempo's http RPC, for calls and logs. */
+        rpcUrl: string;
+        /** Tempo's websocket RPC, for subscriptions. */
+        wssUrl: string;
+        /** The `NoriTempoTokenBridge` that commits proof queue batches. */
+        bridgeAddress: string;
     };
     bridge: {
         /** The bridge's websocket, for the live processing stages. */
         wssUrl: string;
     };
 }
-
-const SOLANA_CLUSTERS: readonly SolanaCluster[] = ['mainnet', 'devnet', 'testnet'];
-
-/**
- * Whether `value` names a public Solana cluster.
- *
- * @param value The configured cluster name.
- * @returns Whether it is one of `SOLANA_CLUSTERS`.
- */
-const isSolanaCluster = (value: string): value is SolanaCluster =>
-    SOLANA_CLUSTERS.some((cluster) => cluster === value);
 
 /** Thrown when a web/ build constant is missing or malformed. */
 export class WebEnvError extends Error {
@@ -82,39 +73,33 @@ export function loadWebEnv(): WebEnv {
             return getAddress(read(name));
         } catch (error) {
             if (error instanceof WebEnvError) throw error;
-            throw new WebEnvError(name, 'is not an Ethereum address');
+            throw new WebEnvError(name, 'is not an EVM address');
         }
     };
-
-    const cluster = read('NORI_WEB_SOLANA_CLUSTER');
-    if (!isSolanaCluster(cluster))
-        throw new WebEnvError(
-            'NORI_WEB_SOLANA_CLUSTER',
-            `is not one of ${SOLANA_CLUSTERS.join(', ')}`,
-        );
-    let programAddress: Address;
-    try {
-        programAddress = address(read('NORI_SOL_TOKEN_PROGRAM_ID'));
-    } catch (error) {
-        if (error instanceof WebEnvError) throw error;
-        throw new WebEnvError('NORI_SOL_TOKEN_PROGRAM_ID', 'is not a Solana address');
-    }
-    const rpcUrl = read('NORI_WEB_ETH_RPC_URL');
-    if (!/^https?:\/\//.test(rpcUrl))
-        throw new WebEnvError('NORI_WEB_ETH_RPC_URL', 'is not an http:// or https:// URL');
-    const wssUrl = read('NORI_WEB_BRIDGE_WSS_URL');
-    if (!/^wss?:\/\//.test(wssUrl))
-        throw new WebEnvError('NORI_WEB_BRIDGE_WSS_URL', 'is not a ws:// or wss:// URL');
+    const readUrl = (name: string, schemes: RegExp, expected: string): string => {
+        const url = read(name);
+        if (!schemes.test(url)) throw new WebEnvError(name, `is not ${expected}`);
+        return url;
+    };
+    const HTTP = /^https?:\/\//;
+    const WS = /^wss?:\/\//;
 
     return {
         ethereum: {
-            chainId: readInteger('NORI_WEB_ETH_CHAIN_ID'),
-            rpcUrl,
+            chainId: readInteger('ETH_CHAIN_ID'),
+            rpcUrl: readUrl('ETH_RPC_URL', HTTP, 'an http:// or https:// URL'),
             proofQueueAddress: readEthAddress('NORI_ETH_PROOF_QUEUE_ADDRESS'),
             proofQueueDeployBlock: readInteger('NORI_WEB_PROOF_QUEUE_DEPLOY_BLOCK'),
             snapshotAddress: readEthAddress('NORI_ETH_SNAPSHOT_ADDRESS'),
         },
-        solana: { cluster, programAddress },
-        bridge: { wssUrl },
+        tempo: {
+            chainId: readInteger('TEMPO_CHAIN_ID'),
+            rpcUrl: readUrl('TEMPO_RPC_NETWORK_URL', HTTP, 'an http:// or https:// URL'),
+            wssUrl: readUrl('TEMPO_WSS_NETWORK_URL', WS, 'a ws:// or wss:// URL'),
+            bridgeAddress: readEthAddress('NORI_TEMPO_TOKEN_BRIDGE_ADDRESS'),
+        },
+        bridge: {
+            wssUrl: readUrl('NORI_WEB_BRIDGE_WSS_URL', WS, 'a ws:// or wss:// URL'),
+        },
     };
 }

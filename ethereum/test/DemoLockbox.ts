@@ -2,7 +2,7 @@
 /// <reference types="@nomicfoundation/hardhat-ethers-chai-matchers" />
 import { expect } from 'chai';
 import hre from 'hardhat';
-import { NoriProofRequestQueue__factory } from '@nori-zk/ethereum-solana-bridge';
+import { NoriProofRequestQueue__factory } from '@nori-zk/ethereum-tempo-bridge';
 import {
     DemoLockbox__factory,
     NoriSnapshot__factory,

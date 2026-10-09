@@ -2,7 +2,7 @@
 /// <reference types="@nomicfoundation/hardhat-ethers-chai-matchers" />
 import { expect } from 'chai';
 import hre from 'hardhat';
-import { NoriProofRequestQueue__factory } from '@nori-zk/ethereum-solana-bridge';
+import { NoriProofRequestQueue__factory } from '@nori-zk/ethereum-tempo-bridge';
 import { NoriSnapshot__factory } from '../../types/ethers-contracts/index.js';
 import {
     MAINNET,
@@ -123,7 +123,7 @@ describe('NoriSnapshot on a mainnet fork', () => {
         }
     });
 
-    it('Should snapshot the six Solana-backing tokens for about 250k gas', async function () {
+    it('Should snapshot the six bridge-backing tokens for about 250k gas', async function () {
         const { snapshot, keeper } = await deployOnForkFixture();
         const queries = encodedQueries(SIX_TOKENS);
         expect(queries).to.have.length(6);
@@ -142,7 +142,7 @@ describe('NoriSnapshot on a mainnet fork', () => {
         expect(receipt.gasUsed).to.be.lessThan(300_000n);
     });
 
-    it('Should read the Solana-only lockboxes as non-empty and unpaused', async function () {
+    it('Should read the bridge lockboxes as non-empty and unpaused', async function () {
         const { snapshot } = await deployOnForkFixture();
         const queries = encodedQueries([
             'usds-lockbox',

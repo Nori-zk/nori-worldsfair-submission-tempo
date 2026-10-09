@@ -15,7 +15,7 @@ export interface ReplayToken$Type {
   readonly deployedLinkReferences: {};
   readonly immutableReferences: {};
   readonly inputSourceName: "project/contracts/test/ReplayToken.sol";
-  readonly buildInfoId: "solc-0_8_28-0a35aedfa58c3beff6833f9c52b60ba88425b0ff";
+  readonly buildInfoId: "solc-0_8_28-b4cdd7fcce621c9aa16a60d7c123476c07d7a18b";
 };
 
 import "hardhat/types/artifacts";

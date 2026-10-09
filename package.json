@@ -5,6 +5,7 @@
     "type": "module",
     "workspaces": [
         "ethereum",
+        "tempo",
         "client",
         "web/libs/ui",
         "web/apps/prove-balance",
@@ -27,8 +28,8 @@
         "lint": "npm run lint --workspaces --if-present",
         "format": "prettier --check .",
         "format:fix": "prettier --write .",
-        "test": "npm run test -w ethereum && npm run test -w client",
-        "test-ci": "npm run test-ci -w ethereum && npm run test-ci -w client",
+        "test": "npm run test -w ethereum && npm run test -w tempo && npm run test -w client",
+        "test-ci": "npm run test-ci -w ethereum && npm run test-ci -w tempo && npm run test-ci -w client",
         "clean:modules": "rm -rf node_modules */node_modules */*/node_modules */*/*/node_modules",
         "reinstall": "npm run clean:modules && rm -f package-lock.json && npm install",
         "reinstall:ci": "npm run clean:modules && npm ci"

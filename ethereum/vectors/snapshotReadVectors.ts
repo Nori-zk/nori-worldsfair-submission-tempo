@@ -2,12 +2,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import type { HardhatEthers } from '@nomicfoundation/hardhat-ethers/types';
 import type { ContractTransactionResponse } from 'ethers';
-import { NoriProofRequestQueue__factory } from '@nori-zk/ethereum-solana-bridge';
+import { NoriProofRequestQueue__factory } from '@nori-zk/ethereum-tempo-bridge';
 import {
     request_batch_root,
     request_witness,
     type RequestLeaf,
-} from '@nori-zk/ethereum-solana-proof-queue-utils-glam';
+} from '@nori-zk/ethereum-tempo-proof-queue-utils-glam';
 import {
     NoriSnapshot__factory,
     ReplayToken__factory,
@@ -20,6 +20,7 @@ import {
     queryIdOf,
 } from '../queries.js';
 import { resultWitnessOf } from '../snapshotProof.js';
+import { KELP_REPLAY_START } from '../kelpReplay.const.js';
 
 const VECTORS_DIR = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -45,7 +46,7 @@ export const MAINNET_VECTORS_FILE = path.join(
 );
 
 /**
- * Test vectors for verifying NoriSnapshot results on Solana (nori-read):
+ * Test vectors for verifying NoriSnapshot results on Tempo (NoriRead):
  * one proof queue batch rebuilt from contract state exactly as a witness
  * builder does, with every request's witness and every snapshot result's
  * witness. Hashing comes from the sdk's hashing wasm, the SP1 guest's own code.
@@ -387,8 +388,6 @@ export async function buildMainnetSnapshotReadVectors(
     );
 }
 
-const REPLAY_START = Date.parse('2030-01-01T00:00:00Z') / 1000;
-
 /**
  * The KelpDAO drain (18 Apr 2026) replayed with its real lockbox numbers, at
  * fixed times from 2030-01-01T00:00:00Z (after any test run, so a validator
@@ -408,7 +407,7 @@ export async function buildKelpReplayVectors(
         send: () => Promise<ContractTransactionResponse>
     ) => {
         await ethers.provider.send('evm_setNextBlockTimestamp', [
-            REPLAY_START + offset,
+            KELP_REPLAY_START + offset,
         ]);
         const tx = await send();
         await mined(tx);

@@ -79,7 +79,7 @@ export const deploy = task(
                     ethers.ZeroAddress;
 
                 logger.log(
-                    'Deploying NoriProofRequestQueue (nori-solana-sdk artifact)...'
+                    'Deploying NoriProofRequestQueue (nori-tempo-sdk artifact)...'
                 );
                 logger.log(`  operator: ${queueOperator}`);
                 logger.log(`  feeRecipient: ${queueFeeRecipient}`);
@@ -87,7 +87,7 @@ export const deploy = task(
                     `  proofRequestQueueFee: ${ethers.formatEther(proofRequestQueueFeeWei)} ETH`
                 );
                 const { NoriProofRequestQueue__factory } =
-                    await import('@nori-zk/ethereum-solana-bridge');
+                    await import('@nori-zk/ethereum-tempo-bridge');
                 const proofQueue = await new NoriProofRequestQueue__factory(
                     deployer
                 ).deploy(

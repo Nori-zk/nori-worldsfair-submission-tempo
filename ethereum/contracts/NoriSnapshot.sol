@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import {INoriProofRequestQueue} from './interfaces/INoriProofRequestQueue.sol';
 
 /// @title NoriSnapshot
-/// @notice Makes the results of any Ethereum view calls provable on Solana.
+/// @notice Makes the results of any Ethereum view calls provable on Tempo.
 ///         `snapshot` runs up to 256 static calls, stores one Merkle root of
 ///         the results (write-once) and enqueues one Nori proof request for it.
 /// @dev No owner, proxy or admin. STORAGE LAYOUT IS PROOF-CRITICAL:

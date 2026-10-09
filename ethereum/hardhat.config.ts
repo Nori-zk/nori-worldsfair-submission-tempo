@@ -12,6 +12,7 @@ import { deploy } from './tasks/deploy.js';
 import { snapshot } from './tasks/snapshot.js';
 import { previewSnapshot } from './tasks/previewSnapshot.js';
 import { deployDemo, demoSet } from './tasks/demo.js';
+import { deployNoriTokenBridge } from './tasks/deployNoriTokenBridge.js';
 
 const logger = new Logger('HardhatConfig');
 
@@ -89,14 +90,21 @@ if (networkName === 'hardhat') {
 
 const config: HardhatUserConfig = {
     networks,
-    tasks: [deploy, snapshot, previewSnapshot, deployDemo, demoSet],
+    tasks: [
+        deploy,
+        snapshot,
+        previewSnapshot,
+        deployDemo,
+        demoSet,
+        deployNoriTokenBridge,
+    ],
     plugins: [
         hardhatMocha,
         hardhatTypechain,
         hardhatEthers,
         hardhatEthersChaiMatchers,
     ],
-    // Same compiler settings as nori-solana-sdk/ethereum, whose
+    // Same compiler settings as nori-tempo-sdk/ethereum, whose
     // NoriProofRequestQueue artifact the tests and deploy task use
     solidity: {
         version: '0.8.28',

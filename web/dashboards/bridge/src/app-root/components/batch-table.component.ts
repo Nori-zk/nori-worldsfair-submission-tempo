@@ -7,7 +7,7 @@ import {
     NORI_BRIDGE_INFRA_STAGE_TEXT,
     NoriBridgeInfraService,
     noriBridgeInfraStageIndex,
-} from '@nori-zk/solana-web-ui';
+} from '@nori-zk/tempo-web-ui';
 import { BridgeDashboardService } from '../services/bridge-dashboard.service.js';
 import { type ShownBatch, type BridgeBatchesState } from '../ystate/bridge-batches.js';
 import { contractName } from '../utils/format.js';

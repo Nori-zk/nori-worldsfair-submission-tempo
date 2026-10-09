@@ -1,5 +1,5 @@
 {
-    "name": "@nori-zk/solana-bridge-dashboard",
+    "name": "@nori-zk/tempo-bridge-dashboard",
     "version": "0.0.1",
     "private": true,
     "description": "Every proof request a contract has submitted, live from the bridge: counts, history, and the latest request through each stage",
@@ -19,10 +19,9 @@
         "format:fix": "prettier --write src/"
     },
     "dependencies": {
-        "@nori-zk/ethereum-solana-bridge": "0.0.1",
-        "@nori-zk/nori-bridge-solana-sdk": "0.1.1",
-        "@nori-zk/solana-web-ui": "*",
-        "@solana/kit": "^8.3.0",
+        "@nori-zk/ethereum-tempo-bridge": "0.0.1",
+        "@nori-zk/nori-bridge-tempo-sdk": "0.0.1",
+        "@nori-zk/tempo-web-ui": "*",
         "@yaw-rx/core": "^0.1.3",
         "@yaw-rx/ystate": "^0.1.0",
         "ethers": "^6.16.0",

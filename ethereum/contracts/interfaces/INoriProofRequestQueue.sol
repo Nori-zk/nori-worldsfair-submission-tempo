@@ -2,7 +2,7 @@
 pragma solidity ^0.8.28;
 
 /// @title INoriProofRequestQueue
-/// @notice The subset of `NoriProofRequestQueue` (nori-solana-sdk,
+/// @notice The subset of `NoriProofRequestQueue` (nori-tempo-sdk,
 ///         ethereum/contracts) that `NoriSnapshot` calls.
 interface INoriProofRequestQueue {
     /// @notice Fee charged per enqueued request, in wei.

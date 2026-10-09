@@ -18,7 +18,7 @@ const pin =
 
 /**
  * Every connection along the bottom of the page, each with a pin: the
- * network, Ethereum through the wallet, Solana, and Nori's websocket, linked
+ * network, Ethereum through the wallet, Tempo, and Nori's websocket, linked
  * to its page.
  */
 @Component({
@@ -27,7 +27,7 @@ const pin =
         <div class="bar">
             <span class="item"><span [className]="network"></span>Network</span>
             <span class="item"><span [className]="ethereum"></span>Ethereum</span>
-            <span class="item"><span [className]="solana"></span>Solana</span>
+            <span class="item"><span [className]="tempo"></span>Tempo</span>
             <a class="item" [href]="noriUrl" target="_blank" rel="noopener">
                 <span [className]="nori"></span><span class="link">Nori</span>
                 <svg class="clip" viewBox="0 0 24 24" aria-hidden="true">
@@ -56,10 +56,8 @@ export class ConnectionPins extends RxElement {
         );
     }
 
-    get solana$(): Observable<string> {
-        return this.connections.connections.solana.http.connection.state$.pipe(
-            map(pin('ready', ['checking'])),
-        );
+    get tempo$(): Observable<string> {
+        return this.connections.tempoHttpState$.pipe(map(pin('ready', ['checking'])));
     }
 
     get nori$(): Observable<string> {

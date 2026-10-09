@@ -1,0 +1,14 @@
+node_modules
+.env
+
+# Hardhat files
+/cache
+artifacts/build-info
+
+# Package build output (tsc -p tsconfig.package.json)
+/build
+
+# Ignore generated env output
+.env.nori-tempo-backstop
+.env.nori-tempo-demo
+.env.nori-tempo-bridge

@@ -1,84 +1,54 @@
 #!/usr/bin/env node
-// LOCAL DRY RUN ONLY. Stands in for the Nori prover on surfpool: writes the
-// Nori program's state and a proof queue batch covering every new queue
-// request, laid out as `initialize` and `update` write them, with surfpool's
-// surfnet_setAccount cheatcode. It proves nothing.
-import { JsonRpcProvider, getBytes, zeroPadValue } from 'ethers';
+// LOCAL DRY RUN ONLY. Stands in for the Nori prover on a local Tempo node
+// (`anvil --network tempo`): writes a proof queue batch covering every new
+// queue request into the Nori bridge's storage, laid out as `update` writes
+// it, with anvil's anvil_setStorageAt cheatcode. It proves nothing.
 import {
-    createSolanaRpc,
-    type Address,
-    type ReadonlyUint8Array,
-} from '@solana/kit';
-import { NoriProofRequestQueue__factory } from '@nori-zk/ethereum-solana-bridge';
-import { findProofQueueBatchPda } from '@nori-zk/nori-bridge-solana-sdk';
+    AbiCoder,
+    JsonRpcProvider,
+    keccak256,
+    toBeHex,
+    zeroPadValue,
+} from 'ethers';
+import { NoriProofRequestQueue__factory } from '@nori-zk/ethereum-tempo-bridge';
 import {
-    findStatePda,
-    getNoriSolTokenBridgeDecoder,
-    getNoriSolTokenBridgeEncoder,
-    getProofRequestRootEntryEncoder,
-    type NoriSolTokenBridgeArgs,
-} from '@nori-zk/nori-bridge-solana-sdk/program';
+    MAX_U64,
+    NoriTempoTokenBridge__factory,
+    PACKED_STATE_OFFSETS,
+    PACKED_STATE_SLOT,
+    PROOF_QUEUE_BATCH_OFFSETS,
+    PROOF_QUEUE_BATCHES_SLOT,
+} from '@nori-zk/tempo-token-bridge';
 import {
     request_batch_root,
     type RequestLeaf,
-} from '@nori-zk/ethereum-solana-proof-queue-utils-glam';
+} from '@nori-zk/ethereum-tempo-proof-queue-utils-glam';
 import { loadConfig, loadEnv } from '../keeper/config.js';
 
 loadEnv();
 const config = loadConfig(process.argv[2] ?? 'keeper.demo.json');
-const { hostname } = new URL(config.solana.rpcUrl);
+const { hostname } = new URL(config.tempo.rpcUrl);
 if (!['127.0.0.1', 'localhost'].includes(hostname)) {
     console.error(
-        `fake-prover only runs against a local surfpool, not ${hostname}`
+        `fake-prover only runs against a local Tempo node, not ${hostname}`
     );
     process.exit(1);
 }
 const provider = new JsonRpcProvider(config.ethereum.rpcUrl);
-const rpc = createSolanaRpc(config.solana.rpcUrl);
-const noriProgram = config.solana.noriProgram;
+const tempo = new JsonRpcProvider(config.tempo.rpcUrl);
+const bridgeAddress = config.tempo.bridge;
 
-async function setAccount(account: Address, data: ReadonlyUint8Array) {
-    const lamports = await rpc
-        .getMinimumBalanceForRentExemption(BigInt(data.length))
-        .send();
-    const response = await fetch(config.solana.rpcUrl, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: 1,
-            method: 'surfnet_setAccount',
-            params: [
-                account,
-                {
-                    lamports: Number(lamports),
-                    data: Buffer.from(data).toString('hex'),
-                    owner: noriProgram,
-                    executable: false,
-                },
-            ],
-        }),
-    });
-    const body = (await response.json()) as { error?: { message: string } };
-    if (body.error)
-        throw new Error(
-            `surfnet_setAccount: ${body.error.message} (is this surfpool?)`
-        );
+const word = (value: bigint) => toBeHex(value, 32);
+
+async function setStorageAt(slot: bigint, value: string) {
+    await tempo.send('anvil_setStorageAt', [bridgeAddress, word(slot), value]);
 }
 
-// The Nori state, as initialize wrote it (or zeroed, on a fresh surfpool)
-const [stateAddress] = await findStatePda({ programAddress: noriProgram });
-const { value: stateAccount } = await rpc
-    .getAccountInfo(stateAddress, { encoding: 'base64' })
-    .send();
-const stateDecoder = getNoriSolTokenBridgeDecoder();
-const state: NoriSolTokenBridgeArgs = stateDecoder.decode(
-    stateAccount
-        ? Buffer.from(stateAccount.data[0], 'base64')
-        : new Uint8Array(stateDecoder.fixedSize)
-);
-let cursor = BigInt(state.queueCursor);
-let batchCount = BigInt(state.proofQueueBatchCount);
+// The bridge's position, as `update` left it
+const bridge = NoriTempoTokenBridge__factory.connect(bridgeAddress, tempo);
+const state = await bridge.state();
+let cursor = state.queueCursor;
+let batchCount = state.proofQueueBatchCount;
 
 const queue = NoriProofRequestQueue__factory.connect(
     config.ethereum.proofQueue,
@@ -106,18 +76,24 @@ if (head > cursor) {
             ),
         });
     }
-    const [batchAddress] = await findProofQueueBatchPda(
-        batchCount,
-        noriProgram
+    const base = BigInt(
+        keccak256(
+            AbiCoder.defaultAbiCoder().encode(
+                ['uint64', 'uint256'],
+                [batchCount, PROOF_QUEUE_BATCHES_SLOT]
+            )
+        )
     );
-    await setAccount(
-        batchAddress,
-        getProofRequestRootEntryEncoder().encode({
-            root: getBytes(request_batch_root({ leaves })),
-            outputBlockNumber: block,
-            inputQueueCursor: cursor,
-            outputQueueCursor: head,
-        })
+    const tempoBlockNumber = BigInt(await tempo.getBlockNumber());
+    await setStorageAt(base, request_batch_root({ leaves }));
+    await setStorageAt(
+        base + 1n,
+        word(
+            (BigInt(block) << PROOF_QUEUE_BATCH_OFFSETS.outputBlockNumber) |
+                (cursor << PROOF_QUEUE_BATCH_OFFSETS.inputQueueCursor) |
+                (head << PROOF_QUEUE_BATCH_OFFSETS.outputQueueCursor) |
+                (tempoBlockNumber << PROOF_QUEUE_BATCH_OFFSETS.tempoBlockNumber)
+        )
     );
     console.log(
         `batch ${batchCount}: requests [${cursor}, ${head}) at Ethereum block ${block}`
@@ -128,15 +104,19 @@ if (head > cursor) {
     console.log(`no new requests (cursor ${cursor})`);
 }
 
-await setAccount(
-    stateAddress,
-    getNoriSolTokenBridgeEncoder().encode({
-        ...state,
-        ethProofQueueAddress: getBytes(config.ethereum.proofQueue),
-        queueCursor: cursor,
-        proofQueueBatchCount: batchCount,
-    })
+// The packed state word: the new cursor and batch count, the head kept
+const packed = BigInt(await tempo.getStorage(bridgeAddress, PACKED_STATE_SLOT));
+const replaced =
+    (MAX_U64 << PACKED_STATE_OFFSETS.queueCursor) |
+    (MAX_U64 << PACKED_STATE_OFFSETS.proofQueueBatchCount);
+await setStorageAt(
+    PACKED_STATE_SLOT,
+    word(
+        (packed & ~replaced) |
+            (cursor << PACKED_STATE_OFFSETS.queueCursor) |
+            (batchCount << PACKED_STATE_OFFSETS.proofQueueBatchCount)
+    )
 );
 console.log(
-    `Nori state ${stateAddress}: cursor ${cursor}, ${batchCount} batches`
+    `Nori bridge ${bridgeAddress}: cursor ${cursor}, ${batchCount} batches`
 );
