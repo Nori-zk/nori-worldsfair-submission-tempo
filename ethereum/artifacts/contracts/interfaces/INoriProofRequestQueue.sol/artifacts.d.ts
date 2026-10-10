@@ -15,7 +15,7 @@ export interface INoriProofRequestQueue$Type {
   readonly deployedLinkReferences: {};
   readonly immutableReferences: {};
   readonly inputSourceName: "project/contracts/interfaces/INoriProofRequestQueue.sol";
-  readonly buildInfoId: "solc-0_8_28-b4cdd7fcce621c9aa16a60d7c123476c07d7a18b";
+  readonly buildInfoId: "solc-0_8_28-e1fb127e15d4ec52a37c4da55e6bfdc4a94c4e64";
 };
 
 import "hardhat/types/artifacts";

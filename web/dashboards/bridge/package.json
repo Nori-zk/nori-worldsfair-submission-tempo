@@ -19,8 +19,8 @@
         "format:fix": "prettier --write src/"
     },
     "dependencies": {
-        "@nori-zk/ethereum-tempo-bridge": "0.0.1",
-        "@nori-zk/nori-bridge-tempo-sdk": "0.0.1",
+        "@nori-zk/ethereum-tempo-bridge": "file:../../../../nori-tempo-sdk/ethereum",
+        "@nori-zk/nori-bridge-tempo-sdk": "file:../../../../nori-tempo-sdk/sdk",
         "@nori-zk/tempo-web-ui": "*",
         "@yaw-rx/core": "^0.1.3",
         "@yaw-rx/ystate": "^0.1.0",

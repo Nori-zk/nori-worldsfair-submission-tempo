@@ -25,8 +25,19 @@ import {
 } from '@nori-zk/ethereum-tempo-proof-queue-utils-glam';
 import { loadConfig, loadEnv } from '../keeper/config.js';
 
+/** What it reads from a keeper or migration config. */
+interface ProverConfig {
+    ethereum: { rpcUrl: string; proofQueue: string };
+    tempo: { rpcUrl: string; bridge: string };
+}
+
+const configPath = process.argv[2];
+if (!configPath) {
+    console.error('Usage: fake-prover <keeper or migration config.json>');
+    process.exit(1);
+}
 loadEnv();
-const config = loadConfig(process.argv[2] ?? 'keeper.demo.json');
+const config = loadConfig<ProverConfig>(configPath);
 const { hostname } = new URL(config.tempo.rpcUrl);
 if (!['127.0.0.1', 'localhost'].includes(hostname)) {
     console.error(

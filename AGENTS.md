@@ -25,7 +25,7 @@ Read before writing code: code written first tends to reinvent what already exis
 | `scripts/`                        | `dry-run.sh` (local loop, fake prover), `deploy-moderato.sh` (Backstop + demo token), `soak.sh` (keeper for hours, then `report.md`)                                                                                                  |
 | `client/`                         | Sample TS client and keeper CLI (`npm run keeper`). `fake-prover` is for local dry runs only. Tests run with `node --test` on the build, since the wasm hasher breaks jest                                                            |
 | `web/`                            | yaw + vite UIs ([README](web/README.md)): `apps/prove-balance`, `dashboards/bridge`, shared `libs/ui` (`@nori-zk/tempo-web-ui`). Build constants in `web/.env` via `web/env.ts`                                                       |
-| (no submodules)                   | The Nori SDK is the packages `@nori-zk/nori-bridge-tempo-sdk`, `@nori-zk/ethereum-tempo-bridge`, `@nori-zk/tempo-token-bridge`, `@nori-zk/tempo-zk-utils` and `@nori-zk/ethereum-tempo-proof-queue-utils-glam`                       |
+| (no submodules)                   | The Nori SDK is the packages `@nori-zk/nori-bridge-tempo-sdk`, `@nori-zk/ethereum-tempo-bridge`, `@nori-zk/tempo-token-bridge`, `@nori-zk/tempo-zk-utils` and `@nori-zk/ethereum-tempo-proof-queue-utils-glam`                        |
 
 ## Commands
 

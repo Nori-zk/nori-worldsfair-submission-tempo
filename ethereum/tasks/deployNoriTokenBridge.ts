@@ -41,9 +41,8 @@ export const deployNoriTokenBridge = task(
                     'deployNoriTokenBridge is for a local fork (ETH_NETWORK=localfork) only'
                 );
             const [deployer] = await ethers.getSigners();
-            const { NoriTokenBridge__factory } = await import(
-                '@nori-zk/ethereum-tempo-bridge'
-            );
+            const { NoriTokenBridge__factory } =
+                await import('@nori-zk/ethereum-tempo-bridge');
             const bridge = await new NoriTokenBridge__factory(deployer).deploy(
                 deployer.address,
                 proofQueue,

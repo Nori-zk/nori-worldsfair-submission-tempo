@@ -1,7 +1,7 @@
 {
     "name": "@nori-zk/backstop-client",
     "version": "0.0.1",
-    "description": "Sample client: from a NoriSnapshot transaction to a Backstop submitRead",
+    "description": "Sample client: the migration CLI (lock on Ethereum, claim and pause on Tempo) and the Backstop keeper",
     "license": "MIT",
     "type": "module",
     "main": "build/index.js",
@@ -18,15 +18,16 @@
         "test-ci": "npm run test",
         "lint": "npx eslint src",
         "keeper": "node --experimental-wasm-modules build/bin/keeper.js",
+        "migrate": "node --experimental-wasm-modules build/bin/migrate.js",
         "fake-prover": "node --experimental-wasm-modules build/bin/fakeProver.js"
     },
     "dependencies": {
         "@nori-zk/ethereum-snapshot": "*",
-        "@nori-zk/ethereum-tempo-bridge": "0.0.1",
+        "@nori-zk/ethereum-tempo-bridge": "file:../../nori-tempo-sdk/ethereum",
         "@nori-zk/ethereum-tempo-proof-queue-utils-glam": "0.0.1",
-        "@nori-zk/nori-bridge-tempo-sdk": "0.0.1",
+        "@nori-zk/nori-bridge-tempo-sdk": "file:../../nori-tempo-sdk/sdk",
         "@nori-zk/tempo-backstop": "*",
-        "@nori-zk/tempo-token-bridge": "0.0.1",
+        "@nori-zk/tempo-token-bridge": "file:../../nori-tempo-sdk/tempo",
         "dotenv": "^17.2.4",
         "ethers": "^6.16.0",
         "rxjs": "^7.8.2"

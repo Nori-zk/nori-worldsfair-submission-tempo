@@ -18,7 +18,7 @@
         "tokens:fetch": "node scripts/fetch-token-list.mjs"
     },
     "dependencies": {
-        "@nori-zk/nori-bridge-tempo-sdk": "0.0.1",
+        "@nori-zk/nori-bridge-tempo-sdk": "file:../../../../nori-tempo-sdk/sdk",
         "@yaw-rx/core": "^0.1.3",
         "@yaw-rx/ystate": "^0.1.0",
         "motion": "^14.0.0",

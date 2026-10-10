@@ -1,0 +1,452 @@
+{
+  "_format": "hh3-artifact-1",
+  "contractName": "Multicall3",
+  "sourceName": "contracts/test/Multicall3.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "target",
+              "type": "address"
+            },
+            {
+              "internalType": "bytes",
+              "name": "callData",
+              "type": "bytes"
+            }
+          ],
+          "internalType": "struct Multicall3.Call[]",
+          "name": "calls",
+          "type": "tuple[]"
+        }
+      ],
+      "name": "aggregate",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "blockNumber",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes[]",
+          "name": "returnData",
+          "type": "bytes[]"
+        }
+      ],
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "target",
+              "type": "address"
+            },
+            {
+              "internalType": "bool",
+              "name": "allowFailure",
+              "type": "bool"
+            },
+            {
+              "internalType": "bytes",
+              "name": "callData",
+              "type": "bytes"
+            }
+          ],
+          "internalType": "struct Multicall3.Call3[]",
+          "name": "calls",
+          "type": "tuple[]"
+        }
+      ],
+      "name": "aggregate3",
+      "outputs": [
+        {
+          "components": [
+            {
+              "internalType": "bool",
+              "name": "success",
+              "type": "bool"
+            },
+            {
+              "internalType": "bytes",
+              "name": "returnData",
+              "type": "bytes"
+            }
+          ],
+          "internalType": "struct Multicall3.Result[]",
+          "name": "returnData",
+          "type": "tuple[]"
+        }
+      ],
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "target",
+              "type": "address"
+            },
+            {
+              "internalType": "bool",
+              "name": "allowFailure",
+              "type": "bool"
+            },
+            {
+              "internalType": "uint256",
+              "name": "value",
+              "type": "uint256"
+            },
+            {
+              "internalType": "bytes",
+              "name": "callData",
+              "type": "bytes"
+            }
+          ],
+          "internalType": "struct Multicall3.Call3Value[]",
+          "name": "calls",
+          "type": "tuple[]"
+        }
+      ],
+      "name": "aggregate3Value",
+      "outputs": [
+        {
+          "components": [
+            {
+              "internalType": "bool",
+              "name": "success",
+              "type": "bool"
+            },
+            {
+              "internalType": "bytes",
+              "name": "returnData",
+              "type": "bytes"
+            }
+          ],
+          "internalType": "struct Multicall3.Result[]",
+          "name": "returnData",
+          "type": "tuple[]"
+        }
+      ],
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "target",
+              "type": "address"
+            },
+            {
+              "internalType": "bytes",
+              "name": "callData",
+              "type": "bytes"
+            }
+          ],
+          "internalType": "struct Multicall3.Call[]",
+          "name": "calls",
+          "type": "tuple[]"
+        }
+      ],
+      "name": "blockAndAggregate",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "blockNumber",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "blockHash",
+          "type": "bytes32"
+        },
+        {
+          "components": [
+            {
+              "internalType": "bool",
+              "name": "success",
+              "type": "bool"
+            },
+            {
+              "internalType": "bytes",
+              "name": "returnData",
+              "type": "bytes"
+            }
+          ],
+          "internalType": "struct Multicall3.Result[]",
+          "name": "returnData",
+          "type": "tuple[]"
+        }
+      ],
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getBasefee",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "basefee",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "blockNumber",
+          "type": "uint256"
+        }
+      ],
+      "name": "getBlockHash",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "blockHash",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getBlockNumber",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "blockNumber",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getChainId",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "chainid",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getCurrentBlockCoinbase",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "coinbase",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getCurrentBlockDifficulty",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "difficulty",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getCurrentBlockGasLimit",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "gaslimit",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getCurrentBlockTimestamp",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "timestamp",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "addr",
+          "type": "address"
+        }
+      ],
+      "name": "getEthBalance",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "balance",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getLastBlockHash",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "blockHash",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bool",
+          "name": "requireSuccess",
+          "type": "bool"
+        },
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "target",
+              "type": "address"
+            },
+            {
+              "internalType": "bytes",
+              "name": "callData",
+              "type": "bytes"
+            }
+          ],
+          "internalType": "struct Multicall3.Call[]",
+          "name": "calls",
+          "type": "tuple[]"
+        }
+      ],
+      "name": "tryAggregate",
+      "outputs": [
+        {
+          "components": [
+            {
+              "internalType": "bool",
+              "name": "success",
+              "type": "bool"
+            },
+            {
+              "internalType": "bytes",
+              "name": "returnData",
+              "type": "bytes"
+            }
+          ],
+          "internalType": "struct Multicall3.Result[]",
+          "name": "returnData",
+          "type": "tuple[]"
+        }
+      ],
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bool",
+          "name": "requireSuccess",
+          "type": "bool"
+        },
+        {
+          "components": [
+            {
+              "internalType": "address",
+              "name": "target",
+              "type": "address"
+            },
+            {
+              "internalType": "bytes",
+              "name": "callData",
+              "type": "bytes"
+            }
+          ],
+          "internalType": "struct Multicall3.Call[]",
+          "name": "calls",
+          "type": "tuple[]"
+        }
+      ],
+      "name": "tryBlockAndAggregate",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "blockNumber",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "blockHash",
+          "type": "bytes32"
+        },
+        {
+          "components": [
+            {
+              "internalType": "bool",
+              "name": "success",
+              "type": "bool"
+            },
+            {
+              "internalType": "bytes",
+              "name": "returnData",
+              "type": "bytes"
+            }
+          ],
+          "internalType": "struct Multicall3.Result[]",
+          "name": "returnData",
+          "type": "tuple[]"
+        }
+      ],
+      "stateMutability": "payable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x60808060405234601557610a53908161001a8239f35b5f80fdfe60806040526004361015610011575f80fd5b5f3560e01c80630f28c97d14610114578063174dea711461010f578063252dba421461010a57806327e86d6e146101055780633408e47014610100578063399542e9146100fb5780633e64a696146100f657806342cbb15c146100f15780634d2301cc146100ec57806372425d9d146100e757806382ad56cb146100e257806386d516e8146100dd578063a8b0574e146100d8578063bce38bd7146100d3578063c3077fa9146100ce5763ee82ac5e146100c9575f80fd5b610711565b61067a565b610657565b61063d565b610623565b61057b565b610561565b610539565b61050e565b6104f4565b6104d0565b610461565b610443565b610385565b610235565b3461012e575f36600319011261012e576020604051428152f35b5f80fd5b9181601f8401121561012e5782359167ffffffffffffffff831161012e576020808501948460051b01011161012e57565b602060031982011261012e576004359067ffffffffffffffff821161012e5761018e91600401610132565b9091565b805180835260209291819084018484015e5f828201840152601f01601f1916010190565b9080602083519182815201916020808360051b8301019401925f915b8383106101e157505050505090565b9091929394602080610212600193601f198682030187526040838b5180511515845201519181858201520190610192565b970193019301919392906101d2565b9060206102329281815201906101b6565b90565b61023e36610163565b5f9061024981610786565b925f5b8281106102725761026e856102628634146108be565b60405191829182610221565b0390f35b61027c81866107fe565b51602061028a838686610817565b916102d75f806040860135809a01996102a287610839565b906102b06060890189610843565b91906102c160405180948193610876565b03925af16102cd610883565b8385015215158252565b5191013517156102e95760010161024c565b62461bcd60e51b5f526020600452601760245276135d5b1d1a58d85b1b0cce8818d85b1b0819985a5b1959604a1b60445260845ffd5b90604082019082526040602083015282518091526060820191602060608360051b8301019401925f915b83831061035857505050505090565b9091929394602080610376600193605f198682030187528951610192565b97019301930191939290610349565b61038e36610163565b906103a061039b8361076e565b610743565b82815291601f196103b08261076e565b015f5b8181106104325750505f5b8181106103d4576040518061026e86438361031f565b8061042c5f806103e7600195878961090a565b816103ff6103f483610839565b926020810190610843565b919061041060405180948193610876565b03925af161041c610883565b61042684896107fe565b5261092c565b016103be565b8060606020809388010152016103b3565b3461012e575f36600319011261012e5760206040515f194301408152f35b3461012e575f36600319011261012e576020604051468152f35b90604060031983011261012e57600435801515810361012e57916024359067ffffffffffffffff821161012e5761018e91600401610132565b61023293926060928252602082015281604082015201906101b6565b61026e6104e56104df3661047b565b91610994565b604051918291434043846104b4565b3461012e575f36600319011261012e576020604051488152f35b3461012e575f36600319011261012e576020604051438152f35b6001600160a01b0381160361012e57565b3461012e57602036600319011261012e57602060043561055881610528565b31604051908152f35b3461012e575f36600319011261012e576020604051448152f35b61058436610163565b9061058e82610786565b905f5b8381106105a6576040518061026e8582610221565b6105b081846107fe565b5160206105be838786610972565b916105db5f806105cd86610839565b816102b06040890189610843565b5191013517156105ed57600101610591565b62461bcd60e51b5f526020600452601760245276135d5b1d1a58d85b1b0cce8818d85b1b0819985a5b1959604a1b60445260645ffd5b3461012e575f36600319011261012e576020604051458152f35b3461012e575f36600319011261012e576020604051418152f35b61026e6106666104df3661047b565b6040519182916020835260208301906101b6565b61068336610163565b61068c81610786565b915f5b8281106106a8576040518061026e8643804090846104b4565b8061070b6106b8600193876107fe565b515f806106c685898961090a565b816106e08235926106d684610528565b6020810190610843565b9190826040519384928337810182815203925af16106fc610883565b6020830152151580915261092c565b0161068f565b3461012e57602036600319011261012e576020604051600435408152f35b634e487b7160e01b5f52604160045260245ffd5b6040519190601f01601f1916820167ffffffffffffffff81118382101761076957604052565b61072f565b67ffffffffffffffff81116107695760051b60200190565b9061079361039b8361076e565b82815280926107a4601f199161076e565b015f5b8181106107b357505050565b60405190604082019180831067ffffffffffffffff841117610769576020926040525f8152606083820152828286010152016107a7565b634e487b7160e01b5f52603260045260245ffd5b80518210156108125760209160051b010190565b6107ea565b91908110156108125760051b81013590607e198136030182121561012e570190565b3561023281610528565b903590601e198136030182121561012e570180359067ffffffffffffffff821161012e5760200191813603831361012e57565b908092918237015f815290565b3d156108b9573d9067ffffffffffffffff8211610769576108ad601f8301601f1916602001610743565b9182523d5f602084013e565b606090565b156108c557565b60405162461bcd60e51b815260206004820152601a60248201527f4d756c746963616c6c333a2076616c7565206d69736d617463680000000000006044820152606490fd5b91908110156108125760051b81013590603e198136030182121561012e570190565b1561093357565b60405162461bcd60e51b8152602060048201526017602482015276135d5b1d1a58d85b1b0cce8818d85b1b0819985a5b1959604a1b6044820152606490fd5b91908110156108125760051b81013590605e198136030182121561012e570190565b9291906109a082610786565b935f5b8381106109b05750505050565b806109bd600192886107fe565b51835f806109cc858a8a61090a565b816109dc8235926106d684610528565b9190826040519384928337810182815203925af16109f8610883565b60208401521515809252610a0e575b50016109a3565b610a179061092c565b5f610a0756fea26469706673582212202c1081090ebd298b635f10e2aab4cab47fc0dc8a632444b471206cd6903f616464736f6c634300081c0033",
+  "deployedBytecode": "0x60806040526004361015610011575f80fd5b5f3560e01c80630f28c97d14610114578063174dea711461010f578063252dba421461010a57806327e86d6e146101055780633408e47014610100578063399542e9146100fb5780633e64a696146100f657806342cbb15c146100f15780634d2301cc146100ec57806372425d9d146100e757806382ad56cb146100e257806386d516e8146100dd578063a8b0574e146100d8578063bce38bd7146100d3578063c3077fa9146100ce5763ee82ac5e146100c9575f80fd5b610711565b61067a565b610657565b61063d565b610623565b61057b565b610561565b610539565b61050e565b6104f4565b6104d0565b610461565b610443565b610385565b610235565b3461012e575f36600319011261012e576020604051428152f35b5f80fd5b9181601f8401121561012e5782359167ffffffffffffffff831161012e576020808501948460051b01011161012e57565b602060031982011261012e576004359067ffffffffffffffff821161012e5761018e91600401610132565b9091565b805180835260209291819084018484015e5f828201840152601f01601f1916010190565b9080602083519182815201916020808360051b8301019401925f915b8383106101e157505050505090565b9091929394602080610212600193601f198682030187526040838b5180511515845201519181858201520190610192565b970193019301919392906101d2565b9060206102329281815201906101b6565b90565b61023e36610163565b5f9061024981610786565b925f5b8281106102725761026e856102628634146108be565b60405191829182610221565b0390f35b61027c81866107fe565b51602061028a838686610817565b916102d75f806040860135809a01996102a287610839565b906102b06060890189610843565b91906102c160405180948193610876565b03925af16102cd610883565b8385015215158252565b5191013517156102e95760010161024c565b62461bcd60e51b5f526020600452601760245276135d5b1d1a58d85b1b0cce8818d85b1b0819985a5b1959604a1b60445260845ffd5b90604082019082526040602083015282518091526060820191602060608360051b8301019401925f915b83831061035857505050505090565b9091929394602080610376600193605f198682030187528951610192565b97019301930191939290610349565b61038e36610163565b906103a061039b8361076e565b610743565b82815291601f196103b08261076e565b015f5b8181106104325750505f5b8181106103d4576040518061026e86438361031f565b8061042c5f806103e7600195878961090a565b816103ff6103f483610839565b926020810190610843565b919061041060405180948193610876565b03925af161041c610883565b61042684896107fe565b5261092c565b016103be565b8060606020809388010152016103b3565b3461012e575f36600319011261012e5760206040515f194301408152f35b3461012e575f36600319011261012e576020604051468152f35b90604060031983011261012e57600435801515810361012e57916024359067ffffffffffffffff821161012e5761018e91600401610132565b61023293926060928252602082015281604082015201906101b6565b61026e6104e56104df3661047b565b91610994565b604051918291434043846104b4565b3461012e575f36600319011261012e576020604051488152f35b3461012e575f36600319011261012e576020604051438152f35b6001600160a01b0381160361012e57565b3461012e57602036600319011261012e57602060043561055881610528565b31604051908152f35b3461012e575f36600319011261012e576020604051448152f35b61058436610163565b9061058e82610786565b905f5b8381106105a6576040518061026e8582610221565b6105b081846107fe565b5160206105be838786610972565b916105db5f806105cd86610839565b816102b06040890189610843565b5191013517156105ed57600101610591565b62461bcd60e51b5f526020600452601760245276135d5b1d1a58d85b1b0cce8818d85b1b0819985a5b1959604a1b60445260645ffd5b3461012e575f36600319011261012e576020604051458152f35b3461012e575f36600319011261012e576020604051418152f35b61026e6106666104df3661047b565b6040519182916020835260208301906101b6565b61068336610163565b61068c81610786565b915f5b8281106106a8576040518061026e8643804090846104b4565b8061070b6106b8600193876107fe565b515f806106c685898961090a565b816106e08235926106d684610528565b6020810190610843565b9190826040519384928337810182815203925af16106fc610883565b6020830152151580915261092c565b0161068f565b3461012e57602036600319011261012e576020604051600435408152f35b634e487b7160e01b5f52604160045260245ffd5b6040519190601f01601f1916820167ffffffffffffffff81118382101761076957604052565b61072f565b67ffffffffffffffff81116107695760051b60200190565b9061079361039b8361076e565b82815280926107a4601f199161076e565b015f5b8181106107b357505050565b60405190604082019180831067ffffffffffffffff841117610769576020926040525f8152606083820152828286010152016107a7565b634e487b7160e01b5f52603260045260245ffd5b80518210156108125760209160051b010190565b6107ea565b91908110156108125760051b81013590607e198136030182121561012e570190565b3561023281610528565b903590601e198136030182121561012e570180359067ffffffffffffffff821161012e5760200191813603831361012e57565b908092918237015f815290565b3d156108b9573d9067ffffffffffffffff8211610769576108ad601f8301601f1916602001610743565b9182523d5f602084013e565b606090565b156108c557565b60405162461bcd60e51b815260206004820152601a60248201527f4d756c746963616c6c333a2076616c7565206d69736d617463680000000000006044820152606490fd5b91908110156108125760051b81013590603e198136030182121561012e570190565b1561093357565b60405162461bcd60e51b8152602060048201526017602482015276135d5b1d1a58d85b1b0cce8818d85b1b0819985a5b1959604a1b6044820152606490fd5b91908110156108125760051b81013590605e198136030182121561012e570190565b9291906109a082610786565b935f5b8381106109b05750505050565b806109bd600192886107fe565b51835f806109cc858a8a61090a565b816109dc8235926106d684610528565b9190826040519384928337810182815203925af16109f8610883565b60208401521515809252610a0e575b50016109a3565b610a179061092c565b5f610a0756fea26469706673582212202c1081090ebd298b635f10e2aab4cab47fc0dc8a632444b471206cd6903f616464736f6c634300081c0033",
+  "linkReferences": {},
+  "deployedLinkReferences": {},
+  "immutableReferences": {},
+  "inputSourceName": "project/contracts/test/Multicall3.sol",
+  "buildInfoId": "solc-0_8_28-e1fb127e15d4ec52a37c4da55e6bfdc4a94c4e64"
+}

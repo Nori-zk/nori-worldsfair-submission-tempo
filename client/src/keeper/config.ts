@@ -24,20 +24,11 @@ export interface GuardEntry {
     maxStalenessSecs: number;
 }
 
-/** An ERC-20 whose TIP-20 mirror on Tempo the keeper keeps paused as it is. */
-export interface MirrorEntry {
-    name: string;
-    /** The ERC-20 on Ethereum, locked in the token bridge. */
-    ethToken: string;
-}
-
 export interface KeeperConfig {
     ethereum: {
         rpcUrl: string;
         noriSnapshot: string;
         proofQueue: string;
-        /** The `NoriTokenBridge` whose `syncPause` requests each pause proof; needed with `mirrors`. */
-        tokenBridge?: string;
     };
     tempo: {
         rpcUrl: string;
@@ -51,8 +42,12 @@ export interface KeeperConfig {
         pollSecs: number;
     };
     stateFile: string;
-    guards: GuardEntry[];
-    mirrors?: MirrorEntry[];
+    guards: GuardEntry[]; /**
+     * Endpoints the sdk probes to tell whether the machine is online (any
+     * answer counts). Default: public ones; a local dry run probes its own
+     * node, so it runs without internet access.
+     */
+    network?: { probeUrls?: string[] };
 }
 
 /**
@@ -65,8 +60,10 @@ export function loadEnv() {
         '.env',
         'ethereum/.env.nori-eth-snapshot',
         'ethereum/.env.nori-eth-demo',
+        'ethereum/.env.nori-eth-migration',
         'tempo/.env.nori-tempo-backstop',
         'tempo/.env.nori-tempo-demo',
+        'tempo/.env.nori-tempo-migration',
     ]) {
         const path = fileURLToPath(
             new URL(`../../../${file}`, import.meta.url)
@@ -80,11 +77,11 @@ export function loadEnv() {
 }
 
 /**
- * Reads the keeper config, replacing each ${VAR} in its strings with that
- * environment variable. The keys come from ETH_PRIVATE_KEY and
- * TEMPO_PRIVATE_KEY.
+ * Reads a JSON config (the keeper's, the migration CLI's), replacing each
+ * ${VAR} in its strings with that environment variable. The keys come from
+ * ETH_PRIVATE_KEY and TEMPO_PRIVATE_KEY.
  */
-export function loadConfig(path: string): KeeperConfig {
+export function loadConfig<T = KeeperConfig>(path: string): T {
     const expand = (value: unknown): unknown => {
         if (typeof value === 'string')
             return value.replace(/\$\{(\w+)\}/g, (_, name: string) => {
@@ -99,7 +96,7 @@ export function loadConfig(path: string): KeeperConfig {
             );
         return value;
     };
-    return expand(JSON.parse(readFileSync(path, 'utf8'))) as KeeperConfig;
+    return expand(JSON.parse(readFileSync(path, 'utf8'))) as T;
 }
 
 export function queryOf(query: QueryConfig) {

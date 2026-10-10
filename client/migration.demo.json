@@ -1,0 +1,16 @@
+{
+    "ethereum": {
+        "rpcUrl": "${ETH_RPC_URL}",
+        "proofQueue": "${NORI_ETH_PROOF_QUEUE_ADDRESS}",
+        "tokenBridge": "${NORI_ETH_TOKEN_BRIDGE_ADDRESS}"
+    },
+    "tempo": {
+        "rpcUrl": "${TEMPO_RPC_NETWORK_URL}",
+        "bridge": "${NORI_TEMPO_TOKEN_BRIDGE_ADDRESS}"
+    },
+    "intervals": { "pollSecs": 30 },
+    "stateFile": "migration-state.json",
+    "tokens": [
+        { "name": "dusd", "ethToken": "${NORI_ETH_ISSUER_TOKEN_ADDRESS}" }
+    ]
+}
