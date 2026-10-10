@@ -1,0 +1,49 @@
+:host {
+    display: block;
+    margin-top: 1rem;
+}
+.chains {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: 1rem;
+}
+.chain {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 1rem 1.25rem;
+    border: 1px solid rgb(255 255 255 / 12%);
+    border-radius: 0.75rem;
+    background: rgb(255 255 255 / 3%);
+}
+.chain-name {
+    margin-bottom: 0.25rem;
+    color: var(--nori-light-green);
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+}
+.row {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    color: var(--nori-muted);
+    font-size: 0.9rem;
+}
+.row span:last-child {
+    color: #fff;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+.row span.alert {
+    color: var(--nori-light-green);
+}
+.note {
+    margin: 0.75rem 0 0;
+    color: var(--nori-muted);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+.note:empty {
+    display: none;
+}

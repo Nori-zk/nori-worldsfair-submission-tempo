@@ -9,7 +9,7 @@ export default defineConfig({
     plugins: [viteAssets(['.css', '.html']), viteWatchAssets(), viteTransform(), viteWasm()],
     define: { NORI_WEB_ENV: JSON.stringify(loadWebEnv()) },
     esbuild: { target: 'es2022' },
-    resolve: { dedupe: ['rxjs', '@nori-zk/nori-bridge-tempo-sdk'] },
+    resolve: { dedupe: ['rxjs', 'ethers', '@nori-zk/nori-bridge-tempo-sdk'] },
     optimizeDeps: {
         exclude: [
             '@nori-zk/nori-bridge-tempo-sdk',

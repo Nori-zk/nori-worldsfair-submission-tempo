@@ -34,9 +34,6 @@ input:disabled {
     color: var(--nori-muted);
     font-size: 0.85rem;
 }
-token-select {
-    margin-bottom: var(--gap);
-}
 .summary {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
@@ -125,4 +122,14 @@ token-select {
 }
 proof-progress {
     margin-top: var(--gap);
+}
+.fine {
+    margin: 0.75rem 0 0;
+    color: var(--nori-muted);
+    font-size: 0.8rem;
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+.fine:empty {
+    display: none;
 }

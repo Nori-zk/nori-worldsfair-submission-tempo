@@ -72,13 +72,18 @@ export function cursorRange(inputQueueCursor: bigint, outputQueueCursor: bigint)
         : `#${inputQueueCursor.toString()}–#${last.toString()} ${count}`;
 }
 
+/** The contracts the dashboard names: Backstop's reads and the migration's locks and pause syncs. */
+const CONTRACT_NAMES: Record<string, string> = {
+    [NORI_WEB_ENV.ethereum.snapshotAddress.toLowerCase()]: 'NoriSnapshot',
+    [NORI_WEB_ENV.ethereum.tokenBridgeAddress.toLowerCase()]: 'NoriTokenBridge',
+};
+
 /**
- * The contract that submitted a request, by name when it is NoriSnapshot.
+ * The contract that submitted a request, by name when it is NoriSnapshot or
+ * the token bridge.
  *
  * @param target The submitting address.
- * @returns `NoriSnapshot`, or the address cut short.
+ * @returns `NoriSnapshot`, `NoriTokenBridge`, or the address cut short.
  */
 export const contractName = (target: string): string =>
-    target.toLowerCase() === NORI_WEB_ENV.ethereum.snapshotAddress.toLowerCase()
-        ? 'NoriSnapshot'
-        : shortHex(target);
+    CONTRACT_NAMES[target.toLowerCase()] ?? shortHex(target);

@@ -16,6 +16,8 @@ export interface WebEnv {
         proofQueueDeployBlock: number;
         /** The `NoriSnapshot` address. */
         snapshotAddress: string;
+        /** nori-tempo-sdk's `NoriTokenBridge`: ERC-20 locks and pause syncs. */
+        tokenBridgeAddress: string;
     };
     tempo: {
         /** The Tempo chain the reads expect. */
@@ -30,6 +32,10 @@ export interface WebEnv {
     bridge: {
         /** The bridge's websocket, for the live processing stages. */
         wssUrl: string;
+    };
+    migration: {
+        /** The Ethereum ERC-20 the migrate app moves to its TIP-20 mirror on Tempo. */
+        ethToken: string;
     };
 }
 
@@ -91,6 +97,7 @@ export function loadWebEnv(): WebEnv {
             proofQueueAddress: readEthAddress('NORI_ETH_PROOF_QUEUE_ADDRESS'),
             proofQueueDeployBlock: readInteger('NORI_WEB_PROOF_QUEUE_DEPLOY_BLOCK'),
             snapshotAddress: readEthAddress('NORI_ETH_SNAPSHOT_ADDRESS'),
+            tokenBridgeAddress: readEthAddress('NORI_ETH_TOKEN_BRIDGE_ADDRESS'),
         },
         tempo: {
             chainId: readInteger('TEMPO_CHAIN_ID'),
@@ -100,6 +107,9 @@ export function loadWebEnv(): WebEnv {
         },
         bridge: {
             wssUrl: readUrl('NORI_WEB_BRIDGE_WSS_URL', WS, 'a ws:// or wss:// URL'),
+        },
+        migration: {
+            ethToken: readEthAddress('NORI_WEB_MIGRATION_TOKEN'),
         },
     };
 }

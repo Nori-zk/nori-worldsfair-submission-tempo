@@ -1,8 +1,8 @@
 {
-    "name": "@nori-zk/tempo-prove-balance-app",
+    "name": "@nori-zk/tempo-migrate-app",
     "version": "0.0.1",
     "private": true,
-    "description": "Ethereum balance proofs on Tempo",
+    "description": "Migrate an Ethereum ERC-20 to its TIP-20 on Tempo through Nori: lock on Ethereum, claim on Tempo, its pause followed by proof",
     "license": "MIT",
     "type": "module",
     "scripts": {
@@ -19,9 +19,9 @@
         "format:fix": "prettier --write src/"
     },
     "dependencies": {
-        "@nori-zk/ethereum-snapshot": "*",
         "@nori-zk/ethereum-tempo-bridge": "file:../../../../nori-tempo-sdk/ethereum",
         "@nori-zk/nori-bridge-tempo-sdk": "file:../../../../nori-tempo-sdk/sdk",
+        "@nori-zk/tempo-token-bridge": "file:../../../../nori-tempo-sdk/tempo",
         "@nori-zk/tempo-web-ui": "*",
         "@yaw-rx/core": "^0.1.3",
         "@yaw-rx/ystate": "^0.1.0",
