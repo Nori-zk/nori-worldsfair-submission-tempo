@@ -2,7 +2,10 @@
 
 Solidity for Tempo (`@nori-zk/tempo-backstop`): `NoriRead` verifies one `NoriSnapshot`
 result against a proof queue batch that the Nori bridge (`NoriTempoTokenBridge`) committed,
-and `Backstop` is a circuit breaker built on it.
+and `Backstop` is a circuit breaker built on it: the same guard as the Solana program that
+runs on real proofs in [nori-worldsfair-submission](https://github.com/Nori-zk/nori-worldsfair-submission),
+here built and tested on local chains. The migration's Tempo side is nori-tempo-sdk's
+`NoriTempoTokenBridge` itself ([docs/tempo-migration.md](../docs/tempo-migration.md)).
 
 ## NoriRead
 
@@ -71,6 +74,8 @@ anvil --network tempo &
 npm run test -w tempo         # guard rules, Kelp replay, NoriRead vectors, NoriReadExample
 npm run deploy -w tempo       # Backstop -> tempo/.env.nori-tempo-backstop
 npm run deploy-demo -w tempo -- 116700   # a demo TIP-20 -> tempo/.env.nori-tempo-demo
+# local dry runs: deployNoriBridge <queue> [ethTokenBridge] [--mirror <erc20>] [--adopt <erc20>]
+# (--adopt: the issuer, dev account 1, creates its own TIP-20 and the bridge adopts it)
 ```
 
 ```

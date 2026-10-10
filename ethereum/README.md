@@ -37,10 +37,23 @@ npm run snapshot -- --target 0x... --signature 'balanceOf(address)' --args 0x...
 npm run preview-snapshot # read-only check of each query
 npm run deploy-demo -- 116723.52     # testnet demo: a lockbox you drain by hand
 npm run demo-set -- 223.52 [--paused]
+npm run deploy-issuer-token -- 1000000 --holder 0x...   # testnet demo: the issuer's ERC-20 to migrate (DUSD)
+npm run issuer-pause [-- --unpause]  # as its issuer: pause it, and so its TIP-20 on Tempo once proven
 ```
 
 Config: the repo's `.env` (`../.env.example`). `deploy` writes `.env.nori-eth-snapshot`,
-`deploy-demo` writes `.env.nori-eth-demo`; the later commands and the keeper read them.
+`deploy-demo` writes `.env.nori-eth-demo`, `deploy-issuer-token` writes
+`.env.nori-eth-migration`; the later commands, the keeper and the migration CLI read them.
+
+## The issuer's ERC-20
+
+`DemoIssuerToken` (`contracts/demo/`) is the ERC-20 Tempo's migration guide starts from:
+OpenZeppelin `ERC20`, `AccessControl` (admin, minter, pauser), `Pausable` and `Burnable`,
+18 decimals. Its tests run it through nori-tempo-sdk's real `NoriTokenBridge`: 18 decimals
+locked as 6-decimal bridge units with dust refused, the lock's proven slot, a pause that
+blocks locks and `syncPause` that records it for proving ([docs/tempo-migration.md](../docs/tempo-migration.md)).
+`contracts/test/Multicall3.sol` is vendored (mds1/multicall3, MIT) for local dry runs,
+which plant it at its canonical address on a fresh chain.
 
 ## Cost (mainnet fork, queue fee 0)
 
@@ -50,6 +63,6 @@ Config: the repo's `.env` (`../.env.example`). `deploy` writes `.env.nori-eth-sn
 | 10 queries | 317,908 | $0.93                        |
 
 On Sepolia, which already runs Glamsterdam, a snapshot costs ~730k gas plus ~5.6k per
-query (753,817 for the soak's 4 queries): the queue's `requestProof` alone is ~593k, as new
+query (753,817 for a 4-query snapshot): the queue's `requestProof` alone is ~593k, as new
 storage got dearer. Expect that on mainnet after its fork; one snapshot for every guard
 keeps the fixed cost shared.
