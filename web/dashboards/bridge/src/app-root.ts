@@ -13,9 +13,7 @@ const connectionsOptions: ConnectionsOptions = {
     ethereum: {
         expectedChainId: BigInt(NORI_WEB_ENV.ethereum.chainId),
         http: { rpcUrl: NORI_WEB_ENV.ethereum.rpcUrl },
-        wallet: true,
-        // TEMPORARY: the wallet first; the public RPC first lets the dashboard read without one.
-        order: { calls: ['wallet', 'http'], logs: ['wallet', 'http'] },
+        order: { calls: ['http'], logs: ['http'] },
     },
     tempo: {
         expectedChainId: BigInt(NORI_WEB_ENV.tempo.chainId),
@@ -42,7 +40,6 @@ const connectionsOptions: ConnectionsOptions = {
             heading="Bridge dashboard"
             lede="Every proof request a contract has submitted, from Ethereum to Tempo."
         >
-            <wallet-pair></wallet-pair>
             <batch-table></batch-table>
         </nori-page>
     `,

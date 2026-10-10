@@ -1,11 +1,13 @@
 {
     "ethereum": {
         "rpcUrl": "${ETH_RPC_URL}",
+        "chainId": "${ETH_CHAIN_ID}",
         "noriSnapshot": "${NORI_ETH_SNAPSHOT_ADDRESS}",
         "proofQueue": "${NORI_ETH_PROOF_QUEUE_ADDRESS}"
     },
     "tempo": {
         "rpcUrl": "${TEMPO_RPC_NETWORK_URL}",
+        "chainId": "${TEMPO_CHAIN_ID}",
         "bridge": "${NORI_TEMPO_TOKEN_BRIDGE_ADDRESS}",
         "backstop": "${NORI_TEMPO_BACKSTOP_ADDRESS}"
     },

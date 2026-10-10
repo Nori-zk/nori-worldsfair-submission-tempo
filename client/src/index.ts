@@ -1,3 +1,6 @@
 export * from './snapshotWitness.js';
-export * from './fetchProvenSnapshot.js';
+export * from './snapshotEvent.js';
+export * from './snapshotEvent.impl.js';
+export * from './provenRequest.js';
+export * from './provenRequest.impl.js';
 export * from './backstop.js';

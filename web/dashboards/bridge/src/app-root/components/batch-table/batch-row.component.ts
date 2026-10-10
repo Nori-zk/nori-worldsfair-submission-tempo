@@ -1,19 +1,9 @@
 import { Component, Inject, RxElement, state } from '@yaw-rx/core';
 import { RxFor } from '@yaw-rx/core/directives/rx-for';
 import { RxIf } from '@yaw-rx/core/directives/rx-if';
-import {
-    catchError,
-    combineLatest,
-    filter,
-    from,
-    map,
-    type Observable,
-    of,
-    startWith,
-    switchMap,
-} from 'rxjs';
+import { combineLatest, distinctUntilChanged, filter, map, type Observable, of, switchMap } from 'rxjs';
+import { type ShownProofQueueBatch as Batch } from '@nori-zk/nori-bridge-tempo-sdk';
 import { BridgeDashboardService } from '../../services/bridge-dashboard.service.js';
-import { type ShownBatch as Batch } from '../../ystate/bridge-batches.js';
 import { asciiBar } from '../../utils/ascii.js';
 import { blockText, cursorRange } from '../../utils/format.js';
 import { type Line, lineOf } from '../../utils/request-line.js';
@@ -29,7 +19,7 @@ interface Opened {
 /**
  * One committed batch: its index, its requests (with a filter, how many of
  * them are the contract's), the Ethereum block its proof read the queue at,
- * and a full bar. Opening it (▸ to ▾) lists its requests, read once.
+ * and a full bar. Opening it (▸ to ▾) lists its requests.
  */
 @Component({
     selector: 'batch-row',
@@ -89,24 +79,39 @@ export class BatchRow extends RxElement {
         return of(asciiBar(1));
     }
 
-    /** The opened batch's requests, read when it first opens. */
+    /**
+     * The opened batch's requests, from the sdk's batch requests machine,
+     * which runs while the batch is open. Until they arrive the row says it
+     * is reading them; the machine waits for Ethereum and reads again by
+     * itself, and the pins show the connections.
+     */
     private get opened$(): Observable<Opened> {
         return combineLatest([this.open$, this.present$, this.target$]).pipe(
+            // Each refresh of the view brings a new object for the same batch, whose requests never change.
+            distinctUntilChanged(
+                ([wasOpen, was, wasTarget], [open, batch, target]) =>
+                    wasOpen === open &&
+                    was.proofQueueBatchIndex === batch.proofQueueBatchIndex &&
+                    wasTarget === target,
+            ),
             switchMap(([open, batch, target]) =>
                 !open
                     ? of({ lines: [], status: '' })
-                    : from(this.dashboard.requestsOf(batch, target)).pipe(
-                          map((requests): Opened => ({
-                              lines: requests.map(lineOf),
-                              status: requests.length === 0 ? 'No requests found' : '',
-                          })),
-                          catchError((error: unknown) =>
-                              of<Opened>({
+                    : this.dashboard.batchRequests$(batch, target).pipe(
+                          map((reading): Opened => {
+                              if (reading.node === 'current')
+                                  return {
+                                      lines: reading.data.requests.map(lineOf),
+                                      status:
+                                          reading.data.requests.length === 0
+                                              ? 'No requests found'
+                                              : '',
+                                  };
+                              return {
                                   lines: [],
-                                  status: `Reading failed: ${error instanceof Error ? error.message : String(error)} · close and open to read again`,
-                              }),
-                          ),
-                          startWith<Opened>({ lines: [], status: 'Reading requests…' }),
+                                  status: reading.node === 'closed' ? '' : 'Reading requests…',
+                              };
+                          }),
                       ),
             ),
         );

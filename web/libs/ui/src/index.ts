@@ -1,6 +1,7 @@
 export {
     ConnectionsService,
     PROOF_REQUEST_CONNECTIONS_OPTIONS,
+    type ConnectionPin,
     type ConnectionsOptions,
 } from './services/connections.service.js';
 export { WalletPair } from './components/wallet-pair.component.js';
@@ -10,7 +11,6 @@ export {
     NoriBridgeInfraService,
     type NoriBridgeInfraFinality,
     type NoriBridgeInfraState,
-    type NoriBridgeInfraStateWithTimings,
 } from './services/nori-bridge-infra.service.js';
 export { ConnectionPins } from './components/connection-pins.component.js';
 export { ProofProgress } from './components/proof-progress.component.js';
@@ -24,7 +24,9 @@ export {
     noriBridgeInfraStagesAround,
     type NoriBridgeInfraStage,
 } from './text/noriBridgeInfraStages.js';
+export { TOKEN_AMOUNT_DECIMALS_SHOWN, tokenAmountText } from './text/tokenAmount.js';
 export { LaserFlow } from './components/laser-flow.component.js';
+export { ScrollThumb } from './directives/scroll-thumb.directive.js';
 export {
     brandStyles,
     noriLogo,

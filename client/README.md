@@ -2,7 +2,8 @@
 
 Sample client and keeper CLI, in Node. The browser apps are in [web/](../web/README.md).
 
-- `fetchProvenSnapshot`: snapshot transaction -> the batch index and the witness for any of its results, once Nori has proven its batch. Reads through the sdk's `createConnections`.
+- `createSnapshotEventMachine`: a snapshot transaction's `Snapshot` event, read from its receipt through the sdk's connections.
+- `createProvenRequestMachine`: one proof request until Nori has proven its batch, with the request's witness in it; it gates on the sdk's proof request and witness machines, which its creator owns.
 - `snapshotResultWitness`: the witness in the shape `Backstop.submitRead` and `NoriReadExample.readSnapshotResult` take; the contracts' ethers types (`@nori-zk/tempo-backstop`) encode the calls.
 
 ## Keeper

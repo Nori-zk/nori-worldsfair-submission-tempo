@@ -1,36 +1,36 @@
 import { Component, Inject, RxElement, state } from '@yaw-rx/core';
 import { RxIf } from '@yaw-rx/core/directives/rx-if';
-import { distinctUntilChanged, filter, map, type Observable, switchMap, take } from 'rxjs';
-import type {
-    ProofRequestStateNodeUnion,
-    UnprocessedProofRequestStateNodeUnion,
+import { distinctUntilChanged, filter, map, type Observable, switchMap } from 'rxjs';
+import {
+    ProofRequestState,
+    type ProofRequestStateNodeUnion,
+    type UnprocessedProofRequestStateNodeUnion,
 } from '@nori-zk/nori-bridge-tempo-sdk';
 import { type FollowedProof, ProofProgressService } from '../services/proof-progress.service.js';
 import styles from './proof-progress.component.css';
 
 /**
- * The status line for each node of the proof request machine.
+ * The status line for each node of the proof request machine: where the
+ * request is. Every node but `proofAvailable`, `closed` and the two where
+ * its transaction ended without enqueuing it (`transactionReplaced`,
+ * `transactionDropped`) holds the snapshot last read; while a connection is
+ * down or a read fails the machine reads again by itself, and the pins
+ * show the connections.
  *
  * @param request The proof request machine's state.
  * @returns The status.
  */
 const requestStatus = (request: ProofRequestStateNodeUnion): string => {
-    switch (request.node) {
-        case 'undetermined':
-            return 'Finding the proof request on Ethereum';
-        case 'unprocessed':
-            return `Request #${request.data.requestId.toString()} is waiting for the bridge`;
-        case 'proofAvailable':
-            return `Proven on Tempo in batch #${request.data.proofQueueBatchIndex.toString()}`;
-        case 'waitingForConnectionWhileUndetermined':
-        case 'waitingForConnectionWhileUnprocessed':
-            return `Waiting for ${request.data.waitingOn.join(' and ')}`;
-        case 'failedWhileUndetermined':
-        case 'failedWhileUnprocessed':
-            return `Reading failed: ${request.data.error}`;
-        case 'closed':
-            return 'Stopped';
-    }
+    if (request.node === 'proofAvailable')
+        return `Proven on Tempo in batch #${request.data.snapshot.proofQueueBatchIndex.toString()}`;
+    if (request.node === 'closed') return 'Stopped';
+    if (request.node === 'transactionReplaced')
+        return 'The transaction was replaced in your wallet before it enqueued a proof request';
+    if (request.node === 'transactionDropped') return 'The transaction was dropped before it enqueued a proof request';
+    const { snapshot } = request.data;
+    return snapshot.state === ProofRequestState.Unprocessed
+        ? `Request #${snapshot.requestId.toString()} is waiting for the bridge`
+        : 'Finding the proof request on Ethereum';
 };
 
 /**
@@ -77,11 +77,10 @@ const progressDetail = (progress: UnprocessedProofRequestStateNodeUnion): string
     directives: [RxIf],
     template: `
         <p class="status">{{ status }}</p>
-        <div rx-if="failed">
-            <button class="retry" onclick="retry">Read again</button>
-        </div>
         <div rx-if="processing">
-            <div class="bar"><div class="fill" [style]="fill"></div></div>
+            <div rx-if="timed">
+                <div class="bar"><div class="fill" [style]="fill"></div></div>
+            </div>
             <ol class="stages">
                 <li [class.current]="atFinality">Ethereum finality</li>
                 <li [class.current]="atPrevious">Previous batch</li>
@@ -120,18 +119,21 @@ export class ProofProgress extends RxElement {
         return this.request$.pipe(map(requestStatus));
     }
 
-    get failed$(): Observable<boolean> {
-        return this.request$.pipe(
-            map(
-                (request) =>
-                    request.node === 'failedWhileUndetermined' ||
-                    request.node === 'failedWhileUnprocessed',
-            ),
-        );
-    }
-
     get processing$(): Observable<boolean> {
         return this.progress$.pipe(map((progress) => progress !== undefined));
+    }
+
+    /** Whether the bar's fill is known: the bridge has sent timings, or the wait is over. */
+    get timed$(): Observable<boolean> {
+        return this.progress$.pipe(
+            map(
+                (progress) =>
+                    progress !== undefined &&
+                    (progress.node === 'FinishedWaiting' ||
+                        Number.isFinite(progress.data.elapsed_sec + progress.data.time_remaining_sec)),
+            ),
+            distinctUntilChanged(),
+        );
     }
 
     get fill$(): Observable<string> {
@@ -168,9 +170,5 @@ export class ProofProgress extends RxElement {
 
     get atFinished$(): Observable<boolean> {
         return this.progress$.pipe(map((progress) => progress?.node === 'FinishedWaiting'));
-    }
-
-    retry(): void {
-        this.followed$.pipe(take(1)).subscribe(({ retry }) => retry());
     }
 }

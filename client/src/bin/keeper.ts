@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { type Observable } from 'rxjs';
 import { loadConfig, loadEnv } from '../keeper/config.js';
 import { Keeper } from '../keeper/keeper.js';
 
@@ -18,52 +19,36 @@ Config: keeper.demo.json by default. Its \${VAR}s come from the repo's .env
 and the deploy outputs in ethereum/ and tempo/. ETH_PRIVATE_KEY signs Ethereum
 transactions and TEMPO_PRIVATE_KEY Tempo ones (the keeper key).`;
 
+/** Each command: what it does, until it completes (`run` never does). */
+const commands: Record<string, (keeper: Keeper) => Observable<unknown>> = {
+    'create-guards': (keeper) => keeper.createGuards$(),
+    snapshot: (keeper) => keeper.snapshot$(),
+    checkpoint: (keeper) => keeper.checkpoint$(),
+    submit: (keeper) => keeper.submit$(),
+    'sync-pauses': (keeper) => keeper.syncPauses$(),
+    'apply-pauses': (keeper) => keeper.applyPauses$(),
+    status: (keeper) => keeper.status$(),
+    unlatch: (keeper) => keeper.unlatch$(),
+    run: (keeper) => keeper.run$(),
+};
+
 const [command, configPath = 'keeper.demo.json'] = process.argv.slice(2);
-const commands = [
-    'create-guards',
-    'snapshot',
-    'checkpoint',
-    'submit',
-    'sync-pauses',
-    'apply-pauses',
-    'status',
-    'unlatch',
-    'run',
-];
-if (!command || !commands.includes(command)) {
+const run = command === undefined ? undefined : commands[command];
+if (!run) {
     console.log(USAGE);
     process.exit(command ? 1 : 0);
 }
 
 loadEnv();
-const keeper = await Keeper.connect(loadConfig(configPath));
-switch (command) {
-    case 'create-guards':
-        await keeper.createGuards();
-        break;
-    case 'snapshot':
-        await keeper.snapshot();
-        break;
-    case 'checkpoint':
-        await keeper.checkpoint();
-        break;
-    case 'submit':
-        await keeper.submit();
-        break;
-    case 'sync-pauses':
-        await keeper.syncPauses();
-        break;
-    case 'apply-pauses':
-        await keeper.applyPauses();
-        break;
-    case 'status':
-        await keeper.status();
-        break;
-    case 'unlatch':
-        await keeper.unlatch();
-        break;
-    case 'run':
-        await keeper.run();
-        break;
-}
-if (command !== 'run') process.exit(0);
+const keeper = Keeper.connect(loadConfig(configPath));
+run(keeper).subscribe({
+    complete: () => {
+        keeper.close();
+        process.exit(0);
+    },
+    error: (error: unknown) => {
+        console.error(error);
+        keeper.close();
+        process.exit(1);
+    },
+});

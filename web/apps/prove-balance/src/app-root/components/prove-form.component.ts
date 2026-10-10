@@ -1,34 +1,46 @@
 import { Component, Inject, RxElement } from '@yaw-rx/core';
 import { RxIf } from '@yaw-rx/core/directives/rx-if';
-import { combineLatest, map, type Observable, take } from 'rxjs';
-import { formatEther, formatUnits } from 'ethers';
-import { ConnectionsService, TokenListService } from '@nori-zk/tempo-web-ui';
+import { combineLatest, map, type Observable } from 'rxjs';
+import { TokenListService, tokenAmountText } from '@nori-zk/tempo-web-ui';
 import { TOKEN_CHOSEN } from './prove-form/token-option.component.js';
 import './prove-form/token-select.component.js';
-import type { BalanceRequest } from '../ystate/prove-balance.impl.js';
-import type { ProveBalanceState } from '../ystate/prove-balance.js';
-import {
-    type ProveBalanceMachine,
-    ProveBalanceService,
-} from '../services/prove-balance.service.js';
+import { type BalanceRequest, previewOf, requestOf } from '../machines/prove-balance.impl.js';
+import type { ProveBalanceState } from '../machines/prove-balance.js';
+import { ProveBalanceService } from '../services/prove-balance.service.js';
 import styles from './prove-form.component.css';
 
-/**
- * Whether the machine is at one of `nodes`.
- *
- * @param nodes The nodes.
- * @returns A predicate on states.
- */
-const atNode =
-    (...nodes: ProveBalanceState['node'][]) =>
-    (state: ProveBalanceState): boolean =>
-        nodes.includes(state.node);
+/** The nodes of the flow; a node's own name. */
+type Node = ProveBalanceState['node'];
+
+/** The nodes where the balance is being read for the request the form holds, before any is held. */
+const FIRST_READ: Node[] = ['loading', 'waitingForConnectionWhileLoading'];
+
+/** The nodes `prove` leaves from: a balance is held, or a send can be tried again. */
+const PROVABLE: Node[] = ['current', 'refreshing', 'declined', 'sendFailed', 'reverted'];
+
+/** What the user can do next, in words, for each node of the flow. */
+const MESSAGE: Record<Node, string> = {
+    noAccount: '',
+    editing: 'Enter a token and an Ethereum address',
+    loading: '',
+    current: '',
+    refreshing: '',
+    waitingForConnectionWhileLoading: '',
+    waitingForConnectionWhileRefreshing: '',
+    failedWhileLoading: 'No balance could be read for this token and address yet · trying again',
+    failedWhileRefreshing: 'The balance could not be read again yet · trying again',
+    closed: '',
+    signing: '',
+    declined: 'You cancelled the transaction in your wallet',
+    sendFailed: 'The transaction did not go through · send it again or change the request',
+    proving: '',
+    reverted: 'The transaction did not go through · send it again or change the request',
+};
 
 /**
  * The form for proving a balance: the token and the address, the balance and
  * fee read as soon as both are valid, the snapshot sent from the wallet, and
- * the proof followed to Tempo. It opens once the wallet has shared an
- * account, with that account as the address.
+ * the proof followed to Tempo. Each part shows for the flow's node.
  */
 @Component({
     selector: 'prove-form',
@@ -90,7 +102,6 @@ const atNode =
     styles,
 })
 export class ProveForm extends RxElement {
-    @Inject(ConnectionsService) private readonly connections!: ConnectionsService;
     @Inject(TokenListService) private readonly tokenList!: TokenListService;
     @Inject(ProveBalanceService) private readonly proveBalance!: ProveBalanceService;
 
@@ -98,128 +109,111 @@ export class ProveForm extends RxElement {
         return this.proveBalance.state$;
     }
 
+    /**
+     * The request the flow holds, or an empty one once it is closed.
+     *
+     * @returns The asset and holder.
+     */
+    private get request$(): Observable<BalanceRequest> {
+        return this.state$.pipe(map((state) => requestOf(state) ?? { asset: '', holder: '' }));
+    }
+
     override onInit(): void {
         this.addEventListener(TOKEN_CHOSEN, this.onTokenChosen);
     }
 
     get disconnected$(): Observable<boolean> {
-        return combineLatest([this.connections.ready$, this.connections.account$]).pipe(
-            map(([ready, account]) => !ready || account === ''),
-        );
+        return this.state$.pipe(map(({ node }) => node === 'noAccount'));
     }
 
     get editable$(): Observable<boolean> {
-        return combineLatest([this.disconnected$, this.state$]).pipe(
-            map(([disconnected]) => !disconnected),
-        );
+        return this.state$.pipe(map(({ node }) => node !== 'noAccount' && node !== 'closed'));
     }
 
-    /** Whether the form is fixed: the transaction is being confirmed, or the proof is under way. */
+    /** Whether the form is fixed: the wallet is asked to sign, or the proof is under way. */
     get locked$(): Observable<boolean> {
-        return this.state$.pipe(map(atNode('awaitingSignature', 'proving')));
+        return this.state$.pipe(map(({ node }) => node === 'signing' || node === 'proving'));
     }
 
     /** The one button stays in place until the proof is under way. */
     get actionShown$(): Observable<boolean> {
-        return this.state$.pipe(map((state) => !atNode('proving')(state)));
+        return this.state$.pipe(map(({ node }) => node !== 'proving'));
     }
 
-    /** "Read again" after a failed read, else "Prove on Tempo", or confirming while the wallet asks. */
     get actionLabel$(): Observable<string> {
         return this.state$.pipe(
-            map((state) =>
-                state.node === 'readFailed'
-                    ? 'Read again'
-                    : state.node === 'awaitingSignature'
-                      ? 'Confirming in your wallet…'
-                      : 'Prove on Tempo',
-            ),
+            map(({ node }) => (node === 'signing' ? 'Confirm in your wallet…' : 'Prove on Tempo')),
         );
     }
 
-    /** Enabled when there is something to do: prove a read balance, or read again. */
+    /** Enabled where `prove` leaves from, once a balance is held. */
     get actionDisabled$(): Observable<boolean> {
         return this.state$.pipe(
-            map((state) => !atNode('balanceRead', 'declined', 'sendFailed', 'readFailed')(state)),
+            map((state) => !PROVABLE.includes(state.node) || previewOf(state) === undefined),
         );
     }
 
     get asset$(): Observable<string> {
-        return this.state$.pipe(map(({ data }) => data.asset));
+        return this.request$.pipe(map(({ asset }) => asset));
     }
 
     /** Whether the asset is a token the list does not have: its address is typed in. */
     get isOther$(): Observable<boolean> {
-        return combineLatest([this.state$, this.tokenList.tokens$]).pipe(
+        return combineLatest([this.request$, this.tokenList.tokens$]).pipe(
             map(
-                ([{ data }, tokens]) =>
-                    data.asset !== 'eth' &&
-                    !tokens.some(
-                        (token) => token.address.toLowerCase() === data.asset.toLowerCase(),
-                    ),
+                ([{ asset }, tokens]) =>
+                    asset !== 'eth' &&
+                    !tokens.some((token) => token.address.toLowerCase() === asset.toLowerCase()),
             ),
         );
     }
 
     get tokenAddress$(): Observable<string> {
-        return this.state$.pipe(map(({ data }) => (data.asset === 'eth' ? '' : data.asset)));
+        return this.request$.pipe(map(({ asset }) => (asset === 'eth' ? '' : asset)));
     }
 
     get holder$(): Observable<string> {
-        return this.state$.pipe(map(({ data }) => data.holder));
+        return this.request$.pipe(map(({ holder }) => holder));
     }
 
+    /** Whether the balance is on its way for the request the form holds. */
     get reading$(): Observable<boolean> {
-        return this.state$.pipe(map(atNode('reading')));
+        return this.state$.pipe(map(({ node }) => FIRST_READ.includes(node)));
     }
 
-    /** The balance read, nothing while reading, or "—" before there is one. */
+    /** The balance read, nothing while it is on its way, or "—" before there is one. */
     get balance$(): Observable<string> {
         return this.state$.pipe(
-            map((state) =>
-                'balance' in state.data
-                    ? `${formatUnits(state.data.balance, state.data.decimals)} ${state.data.symbol}`
-                    : state.node === 'reading'
-                      ? ''
-                      : '—',
-            ),
+            map((state) => {
+                const preview = previewOf(state);
+                if (preview !== undefined)
+                    return tokenAmountText(preview.balance, preview.decimals, preview.symbol);
+                return FIRST_READ.includes(state.node) ? '' : '—';
+            }),
         );
     }
 
     /** The snapshot fee read, or "—" before there is one. */
     get fee$(): Observable<string> {
         return this.state$.pipe(
-            map((state) => ('fee' in state.data ? `${formatEther(state.data.fee)} ETH` : '—')),
-        );
-    }
-
-    /** What the user is waiting on or what went wrong, for the node the machine is at. */
-    get message$(): Observable<string> {
-        return this.state$.pipe(
             map((state) => {
-                switch (state.node) {
-                    case 'editing':
-                        return 'Enter a token and an Ethereum address';
-                    case 'waitingForConnection':
-                        return `Waiting for ${state.data.waitingOn.join(' and ')}`;
-                    case 'readFailed':
-                        return state.data.error;
-                    case 'declined':
-                        return 'You cancelled the transaction in your wallet';
-                    case 'sendFailed':
-                        return state.data.error;
-                    case 'reading':
-                    case 'balanceRead':
-                    case 'awaitingSignature':
-                    case 'proving':
-                        return '';
-                }
+                const preview = previewOf(state);
+                return preview === undefined ? '—' : tokenAmountText(preview.fee, 18, 'ETH');
             }),
         );
     }
 
+    /**
+     * What the user can do next, in words, for the node the flow is at. The
+     * flow reads again by itself while Ethereum is down or a read fails, and
+     * the pins show the connections.
+     */
+    get message$(): Observable<string> {
+        return this.state$.pipe(map(({ node }) => MESSAGE[node]));
+    }
+
     get proving$(): Observable<boolean> {
-        return this.state$.pipe(map(atNode('proving')));
+        return this.state$.pipe(map(({ node }) => node === 'proving'));
     }
 
     get txHash$(): Observable<string> {
@@ -230,7 +224,7 @@ export class ProveForm extends RxElement {
 
     onTokenAddress(event: Event): void {
         const asset = (event.target as HTMLInputElement).value.trim();
-        this.editRequest((request) => ({ ...request, asset }));
+        this.proveBalance.edit((request) => ({ ...request, asset }));
     }
 
     /**
@@ -242,47 +236,24 @@ export class ProveForm extends RxElement {
      */
     private readonly onTokenChosen = (event: Event): void => {
         const chosen = (event as CustomEvent<string>).detail;
-        this.editRequest((request) => ({ ...request, asset: chosen === 'other' ? '' : chosen }));
+        this.proveBalance.edit((request) => ({
+            ...request,
+            asset: chosen === 'other' ? '' : chosen,
+        }));
     };
 
     onHolder(event: Event): void {
         const holder = (event.target as HTMLInputElement).value.trim();
-        this.editRequest((request) => ({ ...request, holder }));
+        this.proveBalance.edit((request) => ({ ...request, holder }));
     }
 
-    /** The one button: reads again after a failed read, otherwise proves. */
+    /** The one button: proves the balance read. */
     act(): void {
-        this.state$
-            .pipe(take(1))
-            .subscribe((state) =>
-                this.control((machine) =>
-                    state.node === 'readFailed' ? machine.retry() : machine.prove(),
-                ),
-            );
+        this.proveBalance.machine.prove();
     }
 
     another(): void {
-        this.control((machine) => machine.another());
-    }
-
-    /**
-     * Calls one of the running machine's controls.
-     *
-     * @param call The control to call.
-     * @returns {void}
-     */
-    private control(call: (machine: ProveBalanceMachine) => void): void {
-        this.proveBalance.machine$.pipe(take(1)).subscribe(call);
-    }
-
-    /**
-     * Edits the request the machine holds.
-     *
-     * @param change The new request, from the current one.
-     * @returns {void}
-     */
-    private editRequest(change: (request: BalanceRequest) => BalanceRequest): void {
-        this.proveBalance.edit(change);
+        this.proveBalance.machine.another();
     }
 
     override onDestroy(): void {

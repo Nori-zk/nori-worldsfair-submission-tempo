@@ -1,76 +1,81 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { type Interface, Wallet, type JsonRpcProvider, type Signer } from 'ethers';
 import {
-    Contract,
-    isError,
-    Wallet,
-    ZeroAddress,
-    type JsonRpcProvider,
-} from 'ethers';
-import { firstValueFrom } from 'rxjs';
+    catchError,
+    combineLatest,
+    concatMap,
+    defer,
+    EMPTY,
+    exhaustMap,
+    filter,
+    finalize,
+    from,
+    ignoreElements,
+    map,
+    merge,
+    mergeMap,
+    type Observable,
+    of,
+    pairwise,
+    scan,
+    startWith,
+    switchMap,
+    take,
+    takeWhile,
+    tap,
+    timer,
+} from 'rxjs';
 import { NoriSnapshot__factory } from '@nori-zk/ethereum-snapshot';
 import {
     NoriProofRequestQueue__factory,
     NoriTokenBridge__factory,
     PAUSE_STATE_PAUSED,
     PAUSE_STATE_UNPAUSED,
-    type NoriTokenBridge,
 } from '@nori-zk/ethereum-tempo-bridge';
 import {
-    applyPause,
-    bothReady$,
+    changesOf$,
+    createChainChangesMachine,
+    type ChainChanges,
+    createBridgeStateMachine,
     createConnections,
-    getBridgeState,
-    getProofQueueHead,
-    getProofRequestStateSnapshot,
-    getVerifiedRequestWitness,
-    ProofRequestState,
+    createProofQueueHeadMachine,
+    createSignerTransactionMachine,
+    type ConnectionName,
     type Connections,
+    type TransactionCall,
 } from '@nori-zk/nori-bridge-tempo-sdk';
-import {
-    Backstop__factory,
-    IGuardedToken__factory,
-    ReadKind,
-    type Backstop,
-} from '@nori-zk/tempo-backstop';
-import {
-    ITIP20__factory,
-    NoriTempoTokenBridge__factory,
-    PAUSE_KEY,
-    type NoriTempoTokenBridge,
-} from '@nori-zk/tempo-token-bridge';
+import { Backstop__factory, ReadKind } from '@nori-zk/tempo-backstop';
 import { guardStatusName } from '../backstop.js';
+import { guardConfigOf, queryOf, type GuardEntry, type KeeperConfig, type MirrorEntry } from './config.js';
+import { createFeeMachine } from './fee.impl.js';
+import { type GuardState } from './guard.js';
+import { createGuardMachine } from './guard.impl.js';
+import { type MirrorPauseState } from './mirrorPause.js';
+import { createMirrorPauseMachine } from './mirrorPause.impl.js';
+import { type PauseApplicationState } from './pauseApplication.js';
+import { createPauseApplicationMachine } from './pauseApplication.impl.js';
 import {
-    fetchProvenSnapshot,
-    type ProvenSnapshot,
-} from '../fetchProvenSnapshot.js';
-import {
-    guardConfigOf,
-    queryOf,
-    type GuardEntry,
-    type KeeperConfig,
-    type MirrorEntry,
-} from './config.js';
-import {
-    connectTempo,
-    contractErrorName,
-    createProvider,
-    RPC_TIMEOUT_MS,
-    type Tempo,
-} from './tempo.js';
+    keepSending,
+    type SendLost,
+    sendLost,
+    sendLostReason,
+    type SendOver,
+    sendOutcomeOf,
+    sendOver,
+} from './sends.js';
+import { type SnapshotSubmissionState } from './snapshotSubmission.js';
+import { createSnapshotSubmissionMachine, type GuardRead } from './snapshotSubmission.impl.js';
+import { createProvider } from './tempo.js';
 
-/** How long `snapshot` waits for its transaction to be mined. */
-const SNAPSHOT_WAIT_MS = 3 * 60_000;
-/** The sdk's requests have no timeout of their own; a hung one would stall the loop. */
-const PROVEN_SNAPSHOT_TIMEOUT_MS = 2 * 60_000;
-
-// Backstop errors the keeper treats as "nothing to do"
+// Contract errors the keeper treats as "nothing to do"
 const READ_NOT_NEWER = 'ReadNotNewer';
 const CHECKPOINT_TOO_SOON = 'CheckpointTooSoon';
-const NO_GUARD = 'NoGuard';
-// NoriTempoTokenBridge error the keeper treats as "nothing to do"
 const PAUSE_NOT_NEWER = 'PauseNotNewer';
 
-const PAUSABLE_ABI = ['function paused() view returns (bool)'];
+// The ABIs the keeper's calls are encoded with, and refusals named by
+const backstopInterface = Backstop__factory.createInterface();
+const noriSnapshotInterface = NoriSnapshot__factory.createInterface();
+const noriTokenBridgeInterface = NoriTokenBridge__factory.createInterface();
 
 /** A `syncPause` transaction whose proof is not applied on Tempo yet. */
 interface PendingPause {
@@ -86,57 +91,100 @@ interface KeeperState {
     pausesPending: PendingPause[];
 }
 
+/** How a send ended: over (mined or refused by the contract, `outcome`), or failed to send (`failed`). */
+type SendEnd = { outcome: string } | { failed: string };
+
+/** A running machine, as far as reading its states and closing it go. */
+interface Running<TState> {
+    state$: Observable<TState>;
+    close(): void;
+}
+
+/**
+ * Each `current` value a read machine holds, as it changes.
+ *
+ * @param machine A machine built on `readThroughConnectionsOf`.
+ * @returns Its `current` data, each time it is current.
+ */
+function currentData$<TState extends { node: string; data: unknown }>(
+    machine: Running<TState>
+): Observable<Extract<TState, { node: 'current' }>['data']> {
+    return machine.state$.pipe(
+        filter((state): state is Extract<TState, { node: 'current' }> => state.node === 'current'),
+        map(({ data }) => data)
+    );
+}
+
+/**
+ * The first `current` value a read machine holds, for a one-off command;
+ * the machine is closed once it is read.
+ *
+ * @param machine A machine built on `readThroughConnectionsOf`.
+ * @returns Its `current` data, once.
+ */
+function currentOf$<TState extends { node: string; data: unknown }>(
+    machine: Running<TState>
+): Observable<Extract<TState, { node: 'current' }>['data']> {
+    return currentData$(machine).pipe(
+        take(1),
+        finalize(() => machine.close())
+    );
+}
+
+/**
+ * Each item of a list in the state file not seen before, re-reading the
+ * file every interval: what another keeper process added is picked up too.
+ *
+ * @param items$ The list, each time the file is read.
+ * @param keyOf An item's key.
+ * @returns Each new item, once.
+ */
+function newItems$<T>(items$: Observable<T[]>, keyOf: (item: T) => string): Observable<T> {
+    return items$.pipe(
+        scan(
+            ({ seen }, items) => {
+                const fresh = items.filter((item) => !seen.has(keyOf(item)));
+                return { seen: new Set([...seen, ...fresh.map(keyOf)]), fresh };
+            },
+            { seen: new Set<string>(), fresh: [] as T[] }
+        ),
+        concatMap(({ fresh }) => from(fresh))
+    );
+}
+
 export class Keeper {
+    /** Each log of the Tempo bridge, a committed batch among them: what makes a proof request worth reading again. */
+    private readonly bridgeLogs: ChainChanges;
+
     private constructor(
         private readonly config: KeeperConfig,
-        private readonly tempo: Tempo,
-        private readonly backstop: Backstop,
-        private readonly tempoBridge: NoriTempoTokenBridge,
-        private readonly provider: JsonRpcProvider,
-        private readonly connections: Connections
-    ) {}
+        private readonly connections: Connections,
+        private readonly tempoSigner: Wallet,
+        private readonly ethereumProvider: JsonRpcProvider
+    ) {
+        this.bridgeLogs = createChainChangesMachine(connections.tempo, { address: config.tempo.bridge });
+    }
 
-    /** The keeper signs through its own clients and reads through the sdk's connections. */
-    static async connect(config: KeeperConfig): Promise<Keeper> {
+    /** The keeper signs through its own signers and reads through the sdk's connections. */
+    static connect(config: KeeperConfig): Keeper {
         const key = process.env.TEMPO_PRIVATE_KEY;
         if (!key) throw new Error('Missing env: TEMPO_PRIVATE_KEY');
-        const tempo = connectTempo(config.tempo.rpcUrl, key);
-        const provider = createProvider(config.ethereum.rpcUrl);
-        const [{ chainId }, { chainId: tempoChainId }] = await Promise.all([
-            provider.getNetwork(),
-            tempo.provider.getNetwork(),
-        ]);
         const connections = createConnections({
-            ethereum: {
-                expectedChainId: chainId,
-                http: { rpcUrl: config.ethereum.rpcUrl },
-            },
-            tempo: {
-                expectedChainId: tempoChainId,
-                http: { rpcUrl: config.tempo.rpcUrl },
-            },
+            ethereum: { expectedChainId: BigInt(config.ethereum.chainId), http: { rpcUrl: config.ethereum.rpcUrl } },
+            tempo: { expectedChainId: BigInt(config.tempo.chainId), http: { rpcUrl: config.tempo.rpcUrl } },
         });
-        await withTimeout(
-            firstValueFrom(bothReady$(connections)),
-            RPC_TIMEOUT_MS,
-            'Ethereum and Tempo connections'
-        );
-        const backstop = Backstop__factory.connect(
-            config.tempo.backstop,
-            tempo.signer
-        );
-        const tempoBridge = NoriTempoTokenBridge__factory.connect(
-            config.tempo.bridge,
-            tempo.signer
-        );
         return new Keeper(
             config,
-            tempo,
-            backstop,
-            tempoBridge,
-            provider,
-            connections
+            connections,
+            new Wallet(key, createProvider(config.tempo.rpcUrl)),
+            createProvider(config.ethereum.rpcUrl)
         );
+    }
+
+    /** Closes the keeper's connections. */
+    close() {
+        this.bridgeLogs.close();
+        this.connections.close();
     }
 
     private log(message: string) {
@@ -147,31 +195,14 @@ export class Keeper {
     private ethereumSigner(): Wallet {
         const key = process.env.ETH_PRIVATE_KEY;
         if (!key) throw new Error('Missing env: ETH_PRIVATE_KEY');
-        return new Wallet(key, this.provider);
+        return new Wallet(key, this.ethereumProvider);
     }
 
     private tokenBridgeAddress(): string {
         const { tokenBridge } = this.config.ethereum;
         if (!tokenBridge)
-            throw new Error(
-                'Missing config: ethereum.tokenBridge (the NoriTokenBridge), needed with mirrors'
-            );
+            throw new Error('Missing config: ethereum.tokenBridge (the NoriTokenBridge), needed with mirrors');
         return tokenBridge;
-    }
-
-    private guardId(guard: GuardEntry) {
-        return this.backstop.guardIdOf(guard.token, this.tempo.signer.address);
-    }
-
-    /** The guard, or null when it does not exist. */
-    private async readGuard(guardId: string) {
-        try {
-            return await this.backstop.guard(guardId);
-        } catch (error) {
-            if (contractErrorName(error, this.backstop.interface) === NO_GUARD)
-                return null;
-            throw error;
-        }
     }
 
     private loadState(): KeeperState {
@@ -179,49 +210,173 @@ export class Keeper {
             pending: [],
             pausesPending: [],
             ...(existsSync(this.config.stateFile)
-                ? (JSON.parse(
-                      readFileSync(this.config.stateFile, 'utf8')
-                  ) as Partial<KeeperState>)
+                ? (JSON.parse(readFileSync(this.config.stateFile, 'utf8')) as Partial<KeeperState>)
                 : {}),
         };
     }
 
-    private saveState(state: KeeperState) {
-        writeFileSync(
-            this.config.stateFile,
-            JSON.stringify(state, null, 2) + '\n'
+    /** Applies `change` to the state file as it is now, so what another keeper process added is kept. */
+    private updateState(change: (state: KeeperState) => KeeperState) {
+        writeFileSync(this.config.stateFile, JSON.stringify(change(this.loadState()), null, 2) + '\n');
+    }
+
+    /** Signals to read a proof request again: each log of the Tempo bridge, a committed batch among them. */
+    private bridgeChanged$() {
+        return changesOf$(this.bridgeLogs);
+    }
+
+    /**
+     * Whether the Nori bridge is there: its state machine's first read lands
+     * `current`, or fails (no contract to read). While a connection is down
+     * it waits for it.
+     *
+     * @returns Whether its state can be read, once.
+     */
+    private bridgeReadable$(): Observable<boolean> {
+        return defer(() => {
+            const bridgeState = createBridgeStateMachine(this.connections, this.config.tempo.bridge);
+            return bridgeState.state$.pipe(
+                filter((state) => state.node === 'current' || state.node === 'failedWhileLoading'),
+                take(1),
+                map((state) => state.node === 'current'),
+                finalize(() => bridgeState.close())
+            );
+        });
+    }
+
+    /**
+     * One transaction sent with a signer of the keeper's, made for the call
+     * `call$` gives and sent at once, until it is mined, refused by the
+     * contract, or ends without the chain's verdict. A call that cannot be
+     * made (a read it needs failed) fails to send.
+     *
+     * @param chain The chain it is sent on.
+     * @param signer The keeper's signer there.
+     * @param call$ The call: the contract, its data and the value, once.
+     * @param errors The contract's error ABI, to name a refusal.
+     * @param sent Called once with its hash when it is sent.
+     * @returns How it ended, once.
+     */
+    private send$(
+        chain: ConnectionName,
+        signer: Signer,
+        call$: Observable<TransactionCall>,
+        errors: Interface,
+        sent: (hash: string) => void = () => undefined
+    ): Observable<SendEnd> {
+        return call$.pipe(
+            take(1),
+            map((call) => ({ call })),
+            catchError((error: unknown) => of({ cannotMake: error instanceof Error ? error.message : String(error) })),
+            switchMap((made): Observable<SendEnd> => {
+                if ('cannotMake' in made) return of({ failed: made.cannotMake });
+                const transaction = createSignerTransactionMachine(this.connections, chain, signer, made.call, {
+                    errors,
+                });
+                // Sent on each entry into `ready`: at once, and again once a connection still
+                // being checked is usable (`notReadyToSend` moves back to `ready` by itself).
+                const sending = keepSending(of([transaction]), this.config.intervals.pollSecs * 1000);
+                return merge(
+                    transaction.state$.pipe(
+                        map((state) => ('transactionHash' in state.data ? state.data.transactionHash : '')),
+                        filter((hash) => hash !== ''),
+                        take(1),
+                        tap(sent),
+                        ignoreElements()
+                    ),
+                    transaction.state$.pipe(
+                        filter(
+                            (state): state is SendOver | SendLost =>
+                                sendOver(state) || (sendLost(state) && state.node !== 'notReadyToSend')
+                        ),
+                        take(1),
+                        map((state): SendEnd =>
+                            sendOver(state) ? { outcome: sendOutcomeOf(state) } : { failed: sendLostReason(state) }
+                        )
+                    )
+                ).pipe(
+                    take(1),
+                    finalize(() => {
+                        sending.unsubscribe();
+                        transaction.close();
+                    })
+                );
+            })
         );
+    }
+
+    /** One guard's machine. */
+    private guardMachine(guard: GuardEntry) {
+        return createGuardMachine(
+            this.connections,
+            this.config.tempo.backstop,
+            guard.token,
+            this.tempoSigner.address,
+            this.config.intervals.pollSecs * 1000
+        );
+    }
+
+    /** One mirror's pause state machine. */
+    private mirrorPauseMachine(mirror: MirrorEntry) {
+        return createMirrorPauseMachine(this.connections, {
+            ethToken: mirror.ethToken,
+            tokenBridge: this.tokenBridgeAddress(),
+            tempoBridge: this.config.tempo.bridge,
+        });
     }
 
     /** Creates each configured guard that does not exist yet; the keeper key is its admin. */
-    async createGuards() {
-        const { bridge } = this.config.tempo;
-        if ((await this.tempo.provider.getCode(bridge)) === '0x')
-            throw new Error(
-                `No Nori bridge contract at ${bridge}; deploy it before creating guards`
-            );
-        for (const guard of this.config.guards) {
-            const guardId = await this.guardId(guard);
-            if (await this.readGuard(guardId)) {
-                this.log(`${guard.name}: guard ${guardId} exists`);
-                continue;
-            }
-            await this.tempo.send(
-                this.backstop.createGuard(
-                    guard.token,
-                    guardConfigOf(this.config, guard)
+    createGuards$(): Observable<void> {
+        const { bridge, backstop } = this.config.tempo;
+        return from(this.config.guards).pipe(
+            concatMap((guard) =>
+                currentOf$(this.guardMachine(guard)).pipe(
+                    switchMap(({ guardId, guard: existing }) =>
+                        existing
+                            ? of(this.log(`${guard.name}: guard ${guardId} exists`))
+                            : this.send$(
+                                  'tempo',
+                                  this.tempoSigner,
+                                  this.bridgeReadable$().pipe(
+                                      map((readable): TransactionCall => {
+                                          if (!readable)
+                                              throw new Error(
+                                                  `No Nori bridge state at ${bridge}; deploy it before creating guards`
+                                              );
+                                          return {
+                                              to: backstop,
+                                              data: backstopInterface.encodeFunctionData('createGuard', [
+                                                  guard.token,
+                                                  guardConfigOf(this.config, guard),
+                                              ]),
+                                              value: 0n,
+                                          };
+                                      })
+                                  ),
+                                  backstopInterface
+                              ).pipe(
+                                  map((end) =>
+                                      this.log(
+                                          'failed' in end
+                                              ? `${guard.name}: createGuard failed: ${end.failed}`
+                                              : `${guard.name}: created guard ${guardId} (${end.outcome})`
+                                      )
+                                  )
+                              )
+                    )
                 )
-            );
-            this.log(`${guard.name}: created guard ${guardId}`);
-        }
+            ),
+            ignoreElements()
+        );
     }
 
-    /** One NoriSnapshot transaction covering every configured query. */
-    async snapshot() {
-        const snapshot = NoriSnapshot__factory.connect(
-            this.config.ethereum.noriSnapshot,
-            this.ethereumSigner()
-        );
+    /**
+     * One NoriSnapshot transaction covering every configured query, pending
+     * as soon as it is sent. A reverted one (e.g. the queue fee changed) has
+     * no reads and is dropped; a failed one is logged, and `run` sends the
+     * next one on its interval.
+     */
+    snapshot$(): Observable<void> {
         const queries = new Map<string, { target: string; data: string }>();
         for (const guard of this.config.guards) {
             for (const query of [guard.backing, guard.pause]) {
@@ -230,318 +385,330 @@ export class Keeper {
                 queries.set(queryId, { target, data });
             }
         }
-        const fee = await snapshot.snapshotFee();
-        const tx = await snapshot.snapshot([...queries.values()], {
-            value: fee,
+        return defer(() => {
+            const signer = this.ethereumSigner();
+            let sentHash = '';
+            const { noriSnapshot } = this.config.ethereum;
+            return this.send$(
+                'ethereum',
+                signer,
+                currentOf$(
+                    createFeeMachine(this.connections, noriSnapshot, async (provider) =>
+                        NoriSnapshot__factory.connect(noriSnapshot, provider).snapshotFee()
+                    )
+                ).pipe(
+                    map(
+                        ({ fee }): TransactionCall => ({
+                            to: noriSnapshot,
+                            data: noriSnapshotInterface.encodeFunctionData('snapshot', [[...queries.values()]]),
+                            value: fee,
+                        })
+                    )
+                ),
+                noriSnapshotInterface,
+                (hash) => {
+                    sentHash = hash;
+                    this.updateState((state) => ({ ...state, pending: [...state.pending, hash] }));
+                }
+            ).pipe(
+                map((end) => {
+                    if ('failed' in end) return this.log(`snapshot failed: ${end.failed}`);
+                    if (end.outcome === 'mined')
+                        return this.log(`snapshot ${sentHash}: ${queries.size} queries`);
+                    this.updateState((state) => ({
+                        ...state,
+                        pending: state.pending.filter((hash) => hash !== sentHash),
+                    }));
+                    this.log(`snapshot ${sentHash || '(not sent)'} ${end.outcome}, dropped`);
+                })
+            );
         });
-        // Pending as soon as it is sent: a slow block can't lose it or stall the loop
-        const state = this.loadState();
-        state.pending.push(tx.hash);
-        this.saveState(state);
-        try {
-            const receipt = await tx.wait(1, SNAPSHOT_WAIT_MS);
-            this.log(
-                `snapshot ${tx.hash}: ${queries.size} queries, block ${receipt?.blockNumber}`
-            );
-        } catch (error) {
-            if (isError(error, 'CALL_EXCEPTION')) {
-                // Reverted (e.g. the queue fee changed): it has no reads
-                const current = this.loadState();
-                this.saveState({
-                    ...current,
-                    pending: current.pending.filter((hash) => hash !== tx.hash),
-                });
-                throw new Error(`snapshot ${tx.hash} reverted`);
-            }
-            this.log(
-                `snapshot ${tx.hash}: not mined after ${SNAPSHOT_WAIT_MS / 60_000} min; its reads go in once it is`
-            );
-        }
     }
 
-    /** Records each guard's token supply (skips guards checkpointed too recently). */
-    async checkpoint() {
-        for (const guard of this.config.guards) {
-            try {
-                await this.tempo.send(
-                    this.backstop.checkpoint(await this.guardId(guard))
-                );
-                this.log(`${guard.name}: checkpoint`);
-            } catch (error) {
-                if (
-                    contractErrorName(error, this.backstop.interface) !==
-                    CHECKPOINT_TOO_SOON
+    /** Records each guard's token supply (guards checkpointed too recently are skipped). */
+    checkpoint$(): Observable<void> {
+        const { backstop } = this.config.tempo;
+        return from(this.config.guards).pipe(
+            concatMap((guard) =>
+                this.send$(
+                    'tempo',
+                    this.tempoSigner,
+                    currentOf$(this.guardMachine(guard)).pipe(
+                        map(
+                            ({ guardId }): TransactionCall => ({
+                                to: backstop,
+                                data: backstopInterface.encodeFunctionData('checkpoint', [guardId]),
+                                value: 0n,
+                            })
+                        )
+                    ),
+                    backstopInterface
+                ).pipe(
+                    map((end) => {
+                        if ('failed' in end) this.log(`${guard.name}: checkpoint failed: ${end.failed}`);
+                        else if (end.outcome === 'mined') this.log(`${guard.name}: checkpoint`);
+                        else if (end.outcome !== CHECKPOINT_TOO_SOON) this.log(`${guard.name}: checkpoint ${end.outcome}`);
+                    })
                 )
-                    this.log(
-                        `${guard.name}: checkpoint failed: ${errorMessage(error)}`
-                    );
-            }
-        }
+            ),
+            ignoreElements()
+        );
+    }
+
+    /** Each guard's backing and pause reads a snapshot submits, with the guard's id from its machine. */
+    private guardReads$(): Observable<GuardRead[]> {
+        const { guards } = this.config;
+        if (guards.length === 0) return of([]);
+        return combineLatest(guards.map((guard) => currentOf$(this.guardMachine(guard)))).pipe(
+            take(1),
+            map((read) =>
+                guards.flatMap((guard, i) =>
+                    (
+                        [
+                            [ReadKind.Backing, 'backing', guard.backing],
+                            [ReadKind.Pause, 'pause', guard.pause],
+                        ] as const
+                    ).flatMap(([kind, label, query]) =>
+                        query
+                            ? [
+                                  {
+                                      read: `${guard.name} ${label}`,
+                                      guardId: read[i].guardId,
+                                      kind,
+                                      queryId: queryOf(query).queryId,
+                                  },
+                              ]
+                            : []
+                    )
+                )
+            )
+        );
     }
 
     /**
-     * Submits every pending snapshot's reads whose batch is proven. A read the
-     * contract rejects is logged and dropped; one that fails in transit is
-     * retried next round. Neither blocks other guards or snapshots.
+     * Follows a pending snapshot until its reads are submitted, then drops it
+     * from the pending ones.
+     *
+     * @param snapshotTxHash The snapshot transaction.
+     * @param untilWaiting Ends once it is looked up and its batch is not proven yet, as a one-off `submit` does.
+     * @returns Its states, until it ends.
      */
-    async submit(quiet = false) {
-        const pending = this.loadState().pending;
-        const stillPending: string[] = [];
-        for (const snapshotTxHash of pending) {
-            let done = false;
-            try {
-                done = await this.submitSnapshot(snapshotTxHash);
-            } catch (error) {
-                this.log(
-                    `snapshot ${snapshotTxHash}: failed: ${errorMessage(error)}`
-                );
-            }
-            if (done) this.log(`snapshot ${snapshotTxHash}: reads submitted`);
-            else stillPending.push(snapshotTxHash);
-        }
-        // Keep what another keeper process (a CLI `snapshot`) added meanwhile
-        const current = this.loadState();
-        const added = current.pending.filter((hash) => !pending.includes(hash));
-        this.saveState({ ...current, pending: [...stillPending, ...added] });
-        if (stillPending.length && !quiet)
-            this.log(
-                `${stillPending.length} snapshot(s) pending: waiting for a proof or retrying`
-            );
+    private submission$(snapshotTxHash: string, untilWaiting: boolean): Observable<SnapshotSubmissionState> {
+        return this.guardReads$().pipe(switchMap((reads) => this.submissionOf$(snapshotTxHash, reads, untilWaiting)));
     }
 
-    /** True once the snapshot is proven and every guard's reads are applied. */
-    private async submitSnapshot(snapshotTxHash: string): Promise<boolean> {
-        const snapshot = await withTimeout(
-            fetchProvenSnapshot({
-                connections: this.connections,
+    /**
+     * Follows a pending snapshot with the reads it submits, as `submission$`.
+     *
+     * @param snapshotTxHash The snapshot transaction.
+     * @param reads The guard reads it submits.
+     * @param untilWaiting Ends once it is looked up and its batch is not proven yet.
+     * @returns Its states, until it ends.
+     */
+    private submissionOf$(
+        snapshotTxHash: string,
+        reads: GuardRead[],
+        untilWaiting: boolean
+    ): Observable<SnapshotSubmissionState> {
+        const submission = createSnapshotSubmissionMachine(
+            this.connections,
+            {
+                snapshotTxHash,
                 noriSnapshot: this.config.ethereum.noriSnapshot,
                 proofQueue: this.config.ethereum.proofQueue,
-                snapshotTxHash,
-                bridgeAddress: this.config.tempo.bridge,
-            }),
-            PROVEN_SNAPSHOT_TIMEOUT_MS,
-            'reading the proof request'
+                tempoBridge: this.config.tempo.bridge,
+                backstop: this.config.tempo.backstop,
+                reads,
+            },
+            this.tempoSigner,
+            this.config.intervals.pollSecs * 1000,
+            this.bridgeChanged$()
         );
-        if (!snapshot.proven) return false;
-        let done = true;
-        for (const guard of this.config.guards) {
-            try {
-                await this.submitGuardReads(guard, snapshot);
-            } catch (error) {
-                this.log(
-                    `${guard.name}: snapshot ${snapshotTxHash} failed: ${errorMessage(error)}`
-                );
-                done = false;
-            }
-        }
-        return done;
+        const ended = (state: SnapshotSubmissionState) =>
+            state.node === 'submitted' ||
+            state.node === 'transactionReplaced' ||
+            state.node === 'transactionDropped' ||
+            (untilWaiting && state.node === 'waitingForProof');
+        const drop = () =>
+            this.updateState((current) => ({
+                ...current,
+                pending: current.pending.filter((hash) => hash !== snapshotTxHash),
+            }));
+        return submission.state$.pipe(
+            tap((state) => {
+                if (state.node === 'transactionReplaced' || state.node === 'transactionDropped') {
+                    this.log(
+                        `snapshot ${snapshotTxHash}: ${state.node === 'transactionReplaced' ? 'replaced' : 'dropped'}, no proof request, dropped`
+                    );
+                    drop();
+                }
+                if (state.node !== 'submitted') return;
+                for (const { read, outcome } of state.data.outcomes) {
+                    if (outcome !== 'mined' && outcome !== READ_NOT_NEWER) this.log(`${read}: read ${outcome}, dropped`);
+                }
+                this.log(`snapshot ${snapshotTxHash}: reads submitted`);
+                drop();
+            }),
+            takeWhile((state) => !ended(state), true),
+            finalize(() => submission.close())
+        );
     }
 
-    /** Applies the guard's backing and pause results (an already-applied read is skipped). */
-    private async submitGuardReads(
-        guard: GuardEntry,
-        snapshot: Extract<ProvenSnapshot, { proven: true }>
-    ) {
-        const reads = [
-            [ReadKind.Backing, guard.backing],
-            [ReadKind.Pause, guard.pause],
-        ] as const;
-        for (const [kind, query] of reads) {
-            if (!query) continue;
-            try {
-                await this.tempo.send(
-                    this.backstop.submitRead(
-                        await this.guardId(guard),
-                        kind,
-                        snapshot.proofQueueBatchIndex,
-                        snapshot.witnessFor(queryOf(query).queryId)
+    /** Submits every pending snapshot's reads whose batch is proven, and leaves the rest pending. */
+    submit$(): Observable<void> {
+        return defer(() => from(this.loadState().pending)).pipe(
+            concatMap((hash) => this.submission$(hash, true)),
+            ignoreElements(),
+            finalize(() => {
+                const waiting = this.loadState().pending.length;
+                if (waiting) this.log(`${waiting} snapshot(s) pending: waiting for a proof`);
+            })
+        );
+    }
+
+    /**
+     * Whether a mirror's pause state must be synced: the ERC-20's `paused()`
+     * differs from what the bridge last synced. A token never synced counts
+     * as synced unpaused, as a new mirror starts unpaused; a token without a
+     * mirror on Tempo is skipped (`status` names it).
+     *
+     * @param data The mirror's pause state.
+     * @returns `true` when it must be synced.
+     */
+    private needsSync({ pause }: Extract<MirrorPauseState, { node: 'current' }>['data']): boolean {
+        if (!pause?.mirror) return false;
+        const wanted = pause.erc20Paused ? PAUSE_STATE_PAUSED : PAUSE_STATE_UNPAUSED;
+        return !(pause.synced === wanted || (pause.synced === 0n && !pause.erc20Paused));
+    }
+
+    /** Sends `NoriTokenBridge.syncPause` for one mirror, paying the queue fee; pending as soon as it is sent. */
+    private syncPause$(mirror: MirrorEntry, paused: boolean): Observable<void> {
+        return defer(() => {
+            const signer = this.ethereumSigner();
+            const tokenBridge = this.tokenBridgeAddress();
+            // The queue the token bridge pins (`NoriTokenBridge.proofQueue`, immutable) is the configured one.
+            const { proofQueue } = this.config.ethereum;
+            return this.send$(
+                'ethereum',
+                signer,
+                currentOf$(
+                    createFeeMachine(this.connections, proofQueue, async (provider) =>
+                        NoriProofRequestQueue__factory.connect(proofQueue, provider).proofRequestQueueFee()
                     )
-                );
-            } catch (error) {
-                const name = contractErrorName(error, this.backstop.interface);
-                // A contract error is final for this read; only transport errors retry
-                if (name === undefined) throw error;
-                if (name !== READ_NOT_NEWER)
-                    this.log(`${guard.name}: read rejected (${name}), dropped`);
-            }
-        }
-    }
-
-    /**
-     * Calls `NoriTokenBridge.syncPause` for each mirrored ERC-20 whose
-     * `paused()` differs from the pause state the bridge last synced, paying
-     * the queue fee, and keeps the transaction until `applyPauses` applies
-     * its proof to the mirror. A token never synced counts as synced
-     * unpaused, as a new mirror starts unpaused. Tokens without a mirror on
-     * Tempo are skipped (`status` names them).
-     */
-    async syncPauses() {
-        const mirrors = this.config.mirrors ?? [];
-        if (!mirrors.length) return;
-        const tokenBridge = NoriTokenBridge__factory.connect(
-            this.tokenBridgeAddress(),
-            this.ethereumSigner()
-        );
-        for (const mirror of mirrors) {
-            try {
-                await this.syncPause(tokenBridge, mirror);
-            } catch (error) {
-                this.log(
-                    `${mirror.name}: pause sync failed: ${errorMessage(error)}`
-                );
-            }
-        }
-    }
-
-    private async syncPause(tokenBridge: NoriTokenBridge, mirror: MirrorEntry) {
-        if ((await this.tempoBridge.mirrorOf(mirror.ethToken)) === ZeroAddress)
-            return;
-        // A sync sent but not mined yet has not moved the bridge's pause state
-        for (const pause of this.loadState().pausesPending) {
-            if (
-                pause.ethToken === mirror.ethToken &&
-                !(await this.provider.getTransactionReceipt(
-                    pause.syncPauseTxHash
-                ))
-            )
-                return;
-        }
-        const erc20 = new Contract(
-            mirror.ethToken,
-            PAUSABLE_ABI,
-            this.provider
-        );
-        const [paused, synced] = await Promise.all([
-            erc20.paused() as Promise<boolean>,
-            tokenBridge.pauseState(mirror.ethToken),
-        ]);
-        const wanted = paused ? PAUSE_STATE_PAUSED : PAUSE_STATE_UNPAUSED;
-        if (synced === wanted || (synced === 0n && !paused)) return;
-
-        const queue = NoriProofRequestQueue__factory.connect(
-            await tokenBridge.proofQueue(),
-            this.provider
-        );
-        const tx = await tokenBridge.syncPause(mirror.ethToken, {
-            value: await queue.proofRequestQueueFee(),
-        });
-        // Pending as soon as it is sent, as a snapshot is
-        const state = this.loadState();
-        state.pausesPending.push({
-            name: mirror.name,
-            ethToken: mirror.ethToken,
-            syncPauseTxHash: tx.hash,
-        });
-        this.saveState(state);
-        try {
-            const receipt = await tx.wait(1, SNAPSHOT_WAIT_MS);
-            this.log(
-                `${mirror.name}: syncPause ${tx.hash}: paused ${paused}, block ${receipt?.blockNumber}`
+                ).pipe(
+                    map(
+                        ({ fee }): TransactionCall => ({
+                            to: tokenBridge,
+                            data: noriTokenBridgeInterface.encodeFunctionData('syncPause', [mirror.ethToken]),
+                            value: fee,
+                        })
+                    )
+                ),
+                noriTokenBridgeInterface,
+                (syncPauseTxHash) =>
+                    this.updateState((state) => ({
+                        ...state,
+                        pausesPending: [
+                            ...state.pausesPending,
+                            { name: mirror.name, ethToken: mirror.ethToken, syncPauseTxHash },
+                        ],
+                    }))
             );
-        } catch (error) {
-            if (isError(error, 'CALL_EXCEPTION')) {
-                const current = this.loadState();
-                this.saveState({
-                    ...current,
-                    pausesPending: current.pausesPending.filter(
-                        (pause) => pause.syncPauseTxHash !== tx.hash
-                    ),
-                });
-                throw new Error(`syncPause ${tx.hash} reverted`);
-            }
-            this.log(
-                `${mirror.name}: syncPause ${tx.hash}: not mined after ${SNAPSHOT_WAIT_MS / 60_000} min; it is applied once it is`
-            );
-        }
-    }
-
-    /**
-     * Applies each pending pause sync whose batch is proven to its mirror
-     * with `NoriTempoTokenBridge.applyPause`. One a newer applied batch
-     * supersedes is dropped; another rejection is logged and dropped; a
-     * failure in transit is retried next round.
-     */
-    async applyPauses(quiet = false) {
-        const pending = this.loadState().pausesPending;
-        const stillPending: PendingPause[] = [];
-        for (const pause of pending) {
-            let done = false;
-            try {
-                done = await this.applyPendingPause(pause);
-            } catch (error) {
+        }).pipe(
+            map((end) =>
                 this.log(
-                    `${pause.name}: applyPause of ${pause.syncPauseTxHash} failed: ${errorMessage(error)}`
-                );
-            }
-            if (!done) stillPending.push(pause);
-        }
-        // Keep what another keeper process (a CLI `sync-pauses`) added meanwhile
-        const current = this.loadState();
-        const added = current.pausesPending.filter(
-            (pause) =>
-                !pending.some(
-                    (seen) => seen.syncPauseTxHash === pause.syncPauseTxHash
+                    'failed' in end
+                        ? `${mirror.name}: pause sync failed: ${end.failed}`
+                        : `${mirror.name}: syncPause ${end.outcome}, paused ${paused}`
                 )
+            )
         );
-        this.saveState({
-            ...current,
-            pausesPending: [...stillPending, ...added],
-        });
-        if (stillPending.length && !quiet)
-            this.log(
-                `${stillPending.length} pause sync(s) pending: waiting for a proof or retrying`
-            );
     }
 
-    /** True once the pause state is applied to the mirror, or superseded. */
-    private async applyPendingPause(pause: PendingPause): Promise<boolean> {
-        const { proofQueue } = this.config.ethereum;
-        const { ethereum } = this.connections;
-        const state = await withTimeout(
-            getProofRequestStateSnapshot(this.connections, {
-                proofQueueAddress: proofQueue,
-                proofRequestTxHash: pause.syncPauseTxHash,
-                bridgeAddress: this.config.tempo.bridge,
+    /** Syncs each mirrored ERC-20 whose pause state changed. */
+    syncPauses$(): Observable<void> {
+        return from(this.config.mirrors ?? []).pipe(
+            concatMap((mirror) =>
+                currentOf$(this.mirrorPauseMachine(mirror)).pipe(
+                    switchMap((data) =>
+                        this.needsSync(data) ? this.syncPause$(mirror, data.pause?.erc20Paused ?? false) : EMPTY
+                    )
+                )
+            ),
+            ignoreElements()
+        );
+    }
+
+    /**
+     * Follows a pending pause sync until its proven pause state is applied,
+     * then drops it from the pending ones.
+     *
+     * @param pause The pending sync.
+     * @param untilWaiting Ends once it is looked up and its batch is not proven yet, as a one-off `apply-pauses` does.
+     * @returns Its states, until it ends.
+     */
+    private pauseApplication$(pause: PendingPause, untilWaiting: boolean): Observable<PauseApplicationState> {
+        const application = createPauseApplicationMachine(
+            this.connections,
+            {
+                syncPauseTxHash: pause.syncPauseTxHash,
+                proofQueue: this.config.ethereum.proofQueue,
+                tokenBridge: this.tokenBridgeAddress(),
+                tempoBridge: this.config.tempo.bridge,
+            },
+            this.tempoSigner,
+            this.config.intervals.pollSecs * 1000,
+            this.bridgeChanged$()
+        );
+        const ended = (state: PauseApplicationState) =>
+            state.node === 'applied' ||
+            state.node === 'notAPauseRequest' ||
+            state.node === 'transactionReplaced' ||
+            state.node === 'transactionDropped' ||
+            (untilWaiting && state.node === 'waitingForProof');
+        const drop = () =>
+            this.updateState((current) => ({
+                ...current,
+                pausesPending: current.pausesPending.filter(
+                    ({ syncPauseTxHash }) => syncPauseTxHash !== pause.syncPauseTxHash
+                ),
+            }));
+        return application.state$.pipe(
+            tap((state) => {
+                if (state.node === 'notAPauseRequest') {
+                    this.log(`${pause.name}: ${pause.syncPauseTxHash} is not a pause request of the token bridge, dropped`);
+                    drop();
+                }
+                if (state.node === 'transactionReplaced' || state.node === 'transactionDropped') {
+                    this.log(
+                        `${pause.name}: ${pause.syncPauseTxHash} ${state.node === 'transactionReplaced' ? 'replaced' : 'dropped'}, no proof request, dropped`
+                    );
+                    drop();
+                }
+                if (state.node !== 'applied') return;
+                const { outcome, paused, proofQueueBatchIndex } = state.data;
+                if (outcome === 'mined')
+                    this.log(
+                        `${pause.name}: mirror ${paused ? 'paused' : 'unpaused'} (proof queue batch ${proofQueueBatchIndex})`
+                    );
+                else if (outcome !== PAUSE_NOT_NEWER) this.log(`${pause.name}: applyPause ${outcome}, dropped`);
+                drop();
             }),
-            PROVEN_SNAPSHOT_TIMEOUT_MS,
-            'reading the pause proof request'
+            takeWhile((state) => !ended(state), true),
+            finalize(() => application.close())
         );
-        if (state.state !== ProofRequestState.ProofAvailable) return false;
+    }
 
-        const witness = await withTimeout(
-            getVerifiedRequestWitness(ethereum, state, proofQueue),
-            PROVEN_SNAPSHOT_TIMEOUT_MS,
-            'reading the pause witness'
+    /** Applies each pending pause sync whose batch is proven, and leaves the rest pending. */
+    applyPauses$(): Observable<void> {
+        return defer(() => from(this.loadState().pausesPending)).pipe(
+            concatMap((pause) => this.pauseApplication$(pause, true)),
+            ignoreElements(),
+            finalize(() => {
+                const waiting = this.loadState().pausesPending.length;
+                if (waiting) this.log(`${waiting} pause sync(s) pending: waiting for a proof`);
+            })
         );
-        if (
-            witness.value.target.toLowerCase() !==
-                this.tokenBridgeAddress().toLowerCase() ||
-            witness.value.collectionKeys[0].toLowerCase() !==
-                PAUSE_KEY.toLowerCase()
-        )
-            throw new Error(
-                `${pause.syncPauseTxHash} is not a pause request of the token bridge`
-            );
-
-        const { value } = witness.value;
-        try {
-            await applyPause(
-                this.tempo.signer,
-                this.config.tempo.bridge,
-                witness,
-                state.proofQueueBatchIndex
-            );
-            this.log(
-                `${pause.name}: mirror ${value === PAUSE_STATE_PAUSED ? 'paused' : 'unpaused'} (proof queue batch ${state.proofQueueBatchIndex})`
-            );
-        } catch (error) {
-            const name = contractErrorName(error, this.tempoBridge.interface);
-            // A contract error is final for this pause; only transport errors retry
-            if (name === undefined) throw error;
-            if (name !== PAUSE_NOT_NEWER)
-                this.log(`${pause.name}: applyPause rejected (${name}), dropped`);
-        }
-        return true;
     }
 
     /**
@@ -549,170 +716,141 @@ export class Keeper {
      * Unlatch after a proven read shows the backing restored, or the next
      * read trips it again.
      */
-    async unlatch() {
-        for (const guard of this.config.guards) {
-            const guardId = await this.guardId(guard);
-            const state = await this.readGuard(guardId);
-            if (!state) {
-                this.log(`${guard.name}: no guard ${guardId}`);
-                continue;
-            }
-            if (!state.tripped) {
-                this.log(`${guard.name}: not tripped`);
-                continue;
-            }
-            await this.tempo.send(this.backstop.unlatch(guardId));
-            this.log(
-                `${guard.name}: unlatched (backing ${state.backing} at Ethereum block ${state.backingEthBlock})`
-            );
-        }
-    }
-
-    /** Prints Nori's progress through the proof queue, then each guard's status. */
-    async status() {
-        for (const line of await this.statusLines()) this.log(line);
-    }
-
-    private async statusLines(): Promise<string[]> {
-        const lines: string[] = [];
-        const { bridge } = this.config.tempo;
-        const { ethereum, tempo } = this.connections;
-        const [nori, requests] = await withTimeout(
-            Promise.all([
-                getBridgeState(tempo, bridge).catch((): null => null),
-                getProofQueueHead(ethereum, this.config.ethereum.proofQueue),
-            ]),
-            RPC_TIMEOUT_MS,
-            "reading Nori's progress"
+    unlatch$(): Observable<void> {
+        const { backstop } = this.config.tempo;
+        return from(this.config.guards).pipe(
+            concatMap((guard) =>
+                currentOf$(this.guardMachine(guard)).pipe(
+                    switchMap(({ guardId, guard: state }) => {
+                        if (!state) return of(this.log(`${guard.name}: no guard ${guardId}`));
+                        if (!state.tripped) return of(this.log(`${guard.name}: not tripped`));
+                        return this.send$(
+                            'tempo',
+                            this.tempoSigner,
+                            of({
+                                to: backstop,
+                                data: backstopInterface.encodeFunctionData('unlatch', [guardId]),
+                                value: 0n,
+                            }),
+                            backstopInterface
+                        ).pipe(
+                            map((end) =>
+                                this.log(
+                                    'failed' in end
+                                        ? `${guard.name}: unlatch failed: ${end.failed}`
+                                        : `${guard.name}: unlatched (backing ${state.backing} at Ethereum block ${state.backingEthBlock})`
+                                )
+                            )
+                        );
+                    })
+                )
+            ),
+            ignoreElements()
         );
-        if (nori) {
-            lines.push(
-                `nori: beacon slot ${nori.latestHead} | ${nori.queueCursor} of ${requests} queue requests proven` +
-                    ` | ${nori.proofQueueBatchCount} batches | ${this.loadState().pending.length} snapshot(s) waiting`
-            );
-        } else {
-            lines.push(`nori: no bridge state at ${bridge}`);
-        }
-        for (const guard of this.config.guards) {
-            const guardId = await this.guardId(guard);
-            const state = await this.readGuard(guardId);
-            if (!state) {
-                lines.push(`${guard.name}: no guard ${guardId}`);
-                continue;
-            }
-            const [status, supply] = await Promise.all([
-                this.backstop.status(guardId),
-                IGuardedToken__factory.connect(
-                    guard.token,
-                    this.tempo.provider
-                ).totalSupply(),
-            ]);
-            lines.push(
-                `${guard.name}: ${guardStatusName(status)} | backing ${state.backing} | supply ${supply}` +
-                    ` | Ethereum block ${state.backingEthBlock} | paused ${state.paused}` +
-                    (state.tripped
-                        ? ` | tripped at block ${state.tripEthBlock}, deficit ${state.tripDeficit}`
-                        : '')
-            );
-        }
-        for (const mirror of this.config.mirrors ?? []) {
-            const mirrorAddress = await this.tempoBridge.mirrorOf(
-                mirror.ethToken
-            );
-            if (mirrorAddress === ZeroAddress) {
-                lines.push(
-                    `${mirror.name}: no mirror of ${mirror.ethToken} on Tempo; register it (register-mirror)`
-                );
-                continue;
-            }
-            const [paused, mirrorPaused] = await Promise.all([
-                new Contract(
-                    mirror.ethToken,
-                    PAUSABLE_ABI,
-                    this.provider
-                ).paused() as Promise<boolean>,
-                ITIP20__factory.connect(
-                    mirrorAddress,
-                    this.tempo.provider
-                ).paused(),
-            ]);
-            lines.push(
-                `${mirror.name}: ERC-20 paused ${paused} | mirror ${mirrorAddress} paused ${mirrorPaused}` +
-                    ` | ${this.loadState().pausesPending.filter((pause) => pause.ethToken === mirror.ethToken).length} pause sync(s) waiting`
-            );
-        }
-        return lines;
     }
 
     /**
-     * Checkpoints, snapshots and submits on the configured intervals, syncs
-     * and applies the mirrors' pause states every round, forever, and prints
-     * each status line when it changes. One job at a time, so jobs
-     * never race on the state file.
+     * Nori's progress through the proof queue, then each guard's status, then
+     * each mirror's, each time one changes. The machines read through are
+     * closed when it is unsubscribed.
      */
-    async run() {
-        const { snapshotSecs, checkpointSecs, pollSecs } =
-            this.config.intervals;
-        const last = { checkpoint: 0, snapshot: 0 };
-        const shown = new Set<string>();
-        for (;;) {
-            const now = Date.now() / 1000;
-            const jobs: Array<[string, () => Promise<void>]> = [];
-            if (now - last.checkpoint >= checkpointSecs) {
-                last.checkpoint = now;
-                jobs.push(['checkpoint', () => this.checkpoint()]);
-            }
-            if (now - last.snapshot >= snapshotSecs) {
-                // Only once sent: a failed snapshot retries next round
-                jobs.push([
-                    'snapshot',
-                    async () => {
-                        await this.snapshot();
-                        last.snapshot = now;
-                    },
-                ]);
-            }
-            jobs.push(['submit', () => this.submit(true)]);
-            jobs.push(['sync-pauses', () => this.syncPauses()]);
-            jobs.push(['apply-pauses', () => this.applyPauses(true)]);
-            for (const [name, job] of jobs) {
-                try {
-                    await job();
-                } catch (error) {
-                    this.log(`${name} failed: ${errorMessage(error)}`);
-                }
-            }
-            try {
-                const lines = await this.statusLines();
-                for (const line of lines) if (!shown.has(line)) this.log(line);
-                shown.clear();
-                for (const line of lines) shown.add(line);
-            } catch (error) {
-                this.log(`status failed: ${errorMessage(error)}`);
-            }
-            await new Promise((resolve) =>
-                setTimeout(resolve, pollSecs * 1000)
+    private statusLines$(): Observable<string[]> {
+        return defer(() => {
+            const bridgeState = createBridgeStateMachine(this.connections, this.config.tempo.bridge);
+            const queueHead = createProofQueueHeadMachine(this.connections, this.config.ethereum.proofQueue);
+            const guards = this.config.guards.map((guard) => ({ guard, machine: this.guardMachine(guard) }));
+            const mirrors = (this.config.mirrors ?? []).map((mirror) => ({
+                mirror,
+                machine: this.mirrorPauseMachine(mirror),
+            }));
+            const guardLine = (
+                { name }: GuardEntry,
+                { guardId, guard }: Extract<GuardState, { node: 'current' }>['data']
+            ) =>
+                guard
+                    ? `${name}: ${guardStatusName(guard.status)} | backing ${guard.backing} | supply ${guard.supply}` +
+                      ` | Ethereum block ${guard.backingEthBlock} | paused ${guard.paused}` +
+                      (guard.tripped ? ` | tripped at block ${guard.tripEthBlock}, deficit ${guard.tripDeficit}` : '')
+                    : `${name}: no guard ${guardId}`;
+            const mirrorLine = (mirror: MirrorEntry, { pause }: Extract<MirrorPauseState, { node: 'current' }>['data']) => {
+                if (!pause?.mirror)
+                    return `${mirror.name}: no mirror of ${mirror.ethToken} on Tempo; register it (register-mirror)`;
+                const waiting = this.loadState().pausesPending.filter(
+                    ({ ethToken }) => ethToken === mirror.ethToken
+                ).length;
+                return (
+                    `${mirror.name}: ERC-20 paused ${pause.erc20Paused} | mirror ${pause.mirror} paused ${pause.mirrorPaused}` +
+                    ` | ${waiting} pause sync(s) waiting`
+                );
+            };
+            return combineLatest([
+                currentData$(bridgeState),
+                currentData$(queueHead),
+                guards.length ? combineLatest(guards.map(({ machine }) => currentData$(machine))) : of([]),
+                mirrors.length ? combineLatest(mirrors.map(({ machine }) => currentData$(machine))) : of([]),
+            ]).pipe(
+                map(([{ bridgeState: nori }, { head }, guardData, mirrorData]) => [
+                    nori
+                        ? `nori: beacon slot ${nori.latestHead} | ${nori.queueCursor} of ${head} queue requests proven` +
+                          ` | ${nori.proofQueueBatchCount} batches | ${this.loadState().pending.length} snapshot(s) waiting`
+                        : `nori: no bridge state at ${this.config.tempo.bridge}`,
+                    ...guards.map(({ guard }, i) => guardLine(guard, guardData[i])),
+                    ...mirrors.map(({ mirror }, i) => mirrorLine(mirror, mirrorData[i])),
+                ]),
+                finalize(() => {
+                    bridgeState.close();
+                    queueHead.close();
+                    guards.forEach(({ machine }) => machine.close());
+                    mirrors.forEach(({ machine }) => machine.close());
+                })
             );
-        }
+        });
     }
-}
 
-function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
-
-/** Rejects once `ms` pass; the work itself is left to finish or fail on its own. */
-function withTimeout<T>(
-    work: Promise<T>,
-    ms: number,
-    what: string
-): Promise<T> {
-    let timer: NodeJS.Timeout | undefined;
-    const timeout = new Promise<never>((_, reject) => {
-        timer = setTimeout(
-            () => reject(new Error(`${what} timed out after ${ms / 1000} s`)),
-            ms
+    /** Prints Nori's progress through the proof queue, then each guard's status, then each mirror's. */
+    status$(): Observable<void> {
+        return this.statusLines$().pipe(
+            take(1),
+            map((lines) => lines.forEach((line) => this.log(line)))
         );
-    });
-    return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
+    }
+
+    /**
+     * Checkpoints and snapshots on the configured intervals, follows every
+     * pending snapshot and pause sync until it is applied, syncs each
+     * mirror's pause state as it changes, and prints each status line when it
+     * changes. Never completes.
+     */
+    run$(): Observable<never> {
+        const { snapshotSecs, checkpointSecs, pollSecs } = this.config.intervals;
+        const stateFile$ = timer(0, pollSecs * 1000).pipe(map(() => this.loadState()));
+        return merge(
+            timer(0, checkpointSecs * 1000).pipe(exhaustMap(() => this.checkpoint$())),
+            timer(0, snapshotSecs * 1000).pipe(exhaustMap(() => this.snapshot$())),
+            newItems$(
+                stateFile$.pipe(map(({ pending }) => pending)),
+                (hash) => hash
+            ).pipe(mergeMap((hash) => this.submission$(hash, false))),
+            newItems$(
+                stateFile$.pipe(map(({ pausesPending }) => pausesPending)),
+                ({ syncPauseTxHash }) => syncPauseTxHash
+            ).pipe(mergeMap((pause) => this.pauseApplication$(pause, false))),
+            ...(this.config.mirrors ?? []).map((mirror) =>
+                defer(() => {
+                    const machine = this.mirrorPauseMachine(mirror);
+                    return currentData$(machine).pipe(
+                        filter((data) => this.needsSync(data)),
+                        // One sync at a time per mirror: the bridge's synced state moves once it is mined.
+                        exhaustMap((data) => this.syncPause$(mirror, data.pause?.erc20Paused ?? false)),
+                        finalize(() => machine.close())
+                    );
+                })
+            ),
+            this.statusLines$().pipe(
+                startWith([] as string[]),
+                pairwise(),
+                tap(([shown, lines]) => lines.filter((line) => !shown.includes(line)).forEach((line) => this.log(line)))
+            )
+        ).pipe(ignoreElements()) as Observable<never>;
+    }
 }

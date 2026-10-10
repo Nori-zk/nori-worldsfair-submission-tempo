@@ -34,6 +34,8 @@ export interface MirrorEntry {
 export interface KeeperConfig {
     ethereum: {
         rpcUrl: string;
+        /** The chain `rpcUrl` serves, as a decimal string; the connections check it. */
+        chainId: string;
         noriSnapshot: string;
         proofQueue: string;
         /** The `NoriTokenBridge` whose `syncPause` requests each pause proof; needed with `mirrors`. */
@@ -41,6 +43,8 @@ export interface KeeperConfig {
     };
     tempo: {
         rpcUrl: string;
+        /** The chain `rpcUrl` serves, as a decimal string; the connections check it. */
+        chainId: string;
         /** The `NoriTempoTokenBridge` that proves the queue. */
         bridge: string;
         backstop: string;

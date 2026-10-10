@@ -29,7 +29,7 @@
     "license": "MIT",
     "dependencies": {
         "@nori-zk/ethereum-snapshot": "*",
-        "@nori-zk/tempo-token-bridge": "0.0.1",
+        "@nori-zk/tempo-token-bridge": "0.0.2",
         "esm-iso-logger": "1.0.2",
         "ethers": "^6.16.0"
     },

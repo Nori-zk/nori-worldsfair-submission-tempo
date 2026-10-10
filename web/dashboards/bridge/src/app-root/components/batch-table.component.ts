@@ -7,9 +7,14 @@ import {
     NORI_BRIDGE_INFRA_STAGE_TEXT,
     NoriBridgeInfraService,
     noriBridgeInfraStageIndex,
+    ScrollThumb,
 } from '@nori-zk/tempo-web-ui';
-import { BridgeDashboardService } from '../services/bridge-dashboard.service.js';
-import { type ShownBatch, type BridgeBatchesState } from '../ystate/bridge-batches.js';
+import { type ShownProofQueueBatch } from '@nori-zk/nori-bridge-tempo-sdk';
+import {
+    BridgeDashboardService,
+    type FilteredBatches,
+    viewOf,
+} from '../services/bridge-dashboard.service.js';
 import { contractName } from '../utils/format.js';
 import { type WaitingRow } from '../utils/waiting-rows.js';
 import './batch-table/batch-row.component.js';
@@ -20,25 +25,29 @@ import styles from './batch-table.component.css';
 const LOOP_CELLS = 300;
 
 /**
- * The status line under the table for each node of the batches machine.
+ * The status line under the table: what there is to show. The machine reads
+ * again by itself while a connection is down or a read fails; the pins show
+ * the connections.
  *
- * @param state The machine's state, or `undefined` while the filter is not an address.
- * @returns The status, or nothing while the view is up to date.
+ * @param batches The batches machine's state, or `undefined` while the filter is not an address.
+ * @returns The status, or nothing while batches are shown.
  */
-const batchesStatus = (state: BridgeBatchesState | undefined): string => {
-    if (state === undefined) return 'The filter is not an Ethereum address';
-    const { view, target } = state.data;
+const batchesStatus = (batches: FilteredBatches | undefined): string => {
+    if (batches === undefined) return 'The filter is not an Ethereum address';
+    const { target, state } = batches;
+    if (viewOf(state).batches.length > 0) return '';
     switch (state.node) {
-        case 'loading':
-            return view.batches.length === 0 ? 'Reading the newest batches' : '';
-        case 'watching':
+        case 'current':
         case 'refreshing':
-            if (view.batches.length > 0) return '';
+        case 'waitingForConnectionWhileRefreshing':
+        case 'failedWhileRefreshing':
             return target === '' ? 'No batches yet' : 'No proven requests from this contract yet';
-        case 'waitingForConnection':
-            return `Waiting for ${state.data.waitingOn.join(' and ')}`;
-        case 'failed':
-            return `Reading failed: ${state.data.error}`;
+        case 'loading':
+        case 'waitingForConnectionWhileLoading':
+        case 'failedWhileLoading':
+            return 'Reading the newest batches';
+        case 'closed':
+            return '';
     }
 };
 
@@ -49,7 +58,7 @@ const batchesStatus = (state: BridgeBatchesState | undefined): string => {
  */
 @Component({
     selector: 'batch-table',
-    directives: [RxIf, RxFor],
+    directives: [RxIf, RxFor, ScrollThumb],
     template: `
         <form class="filter" onsubmit="applyFilter($event)">
             <input
@@ -71,7 +80,7 @@ const batchesStatus = (state: BridgeBatchesState | undefined): string => {
             <span>PROVEN</span>
             <span></span>
         </div>
-        <div class="rows">
+        <div class="rows" scroll-thumb>
             <now-row [row]="finalityRow"></now-row>
             <now-row [row]="scheduledRow"></now-row>
             <now-row [row]="processingRow"></now-row>
@@ -90,9 +99,6 @@ const batchesStatus = (state: BridgeBatchesState | undefined): string => {
             </div>
         </div>
         <p class="status">{{ status }}</p>
-        <div rx-if="failed">
-            <button type="button" class="retry" onclick="retry">[ Read again ]</button>
-        </div>
     `,
     styles,
 })
@@ -133,15 +139,15 @@ export class BatchTable extends RxElement {
         );
     }
 
-    get rows$(): Observable<{ key: string; batch: ShownBatch; target: string }[]> {
+    get rows$(): Observable<{ key: string; batch: ShownProofQueueBatch; target: string }[]> {
         return this.dashboard.batches$.pipe(
-            map((state) =>
-                state === undefined
+            map((batches) =>
+                batches === undefined
                     ? []
-                    : state.data.view.batches.map((batch) => ({
+                    : viewOf(batches.state).batches.map((batch) => ({
                           key: batch.proofQueueBatchIndex.toString(),
                           batch,
-                          target: state.data.target,
+                          target: batches.target,
                       })),
             ),
         );
@@ -149,23 +155,20 @@ export class BatchTable extends RxElement {
 
     get summary$(): Observable<string> {
         return this.dashboard.batches$.pipe(
-            map((state) => {
-                if (state === undefined || state.data.view.batchCount === 0n) return '';
-                const { view, target } = state.data;
+            map((batches) => {
+                if (batches === undefined) return '';
+                const view = viewOf(batches.state);
+                if (view.batchCount === 0n) return '';
                 const waiting = `${view.waiting.length.toString()} waiting`;
-                return target === ''
+                return batches.target === ''
                     ? `Batch #${(view.batchCount - 1n).toString()} is the newest · ${waiting}`
-                    : `Showing ${contractName(target)}'s requests · ${waiting}`;
+                    : `Showing ${contractName(batches.target)}'s requests · ${waiting}`;
             }),
         );
     }
 
     get status$(): Observable<string> {
         return this.dashboard.batches$.pipe(map(batchesStatus));
-    }
-
-    get failed$(): Observable<boolean> {
-        return this.dashboard.batches$.pipe(map((state) => state?.node === 'failed'));
     }
 
     get noriOpen$(): Observable<boolean> {
@@ -194,9 +197,5 @@ export class BatchTable extends RxElement {
     clearFilter(): void {
         this.targetInput.value = '';
         this.dashboard.filter('');
-    }
-
-    retry(): void {
-        this.dashboard.retry();
     }
 }

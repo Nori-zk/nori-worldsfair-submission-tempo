@@ -1,4 +1,5 @@
 import {
+    type Arrived,
     ETHEREUM_EPOCH_SEC,
     getCommitTimes,
     getFinalityTimeRemainingSec,
@@ -6,6 +7,7 @@ import {
     NORI_JOB_STAGES,
     sortWaitingProofRequests,
     type EthereumFinality,
+    type ProofQueueBatchesView,
 } from '@nori-zk/nori-bridge-tempo-sdk';
 import {
     NORI_BRIDGE_INFRA_STAGE_TEXT,
@@ -13,7 +15,6 @@ import {
     type NoriBridgeInfraStage,
     type NoriBridgeInfraState,
 } from '@nori-zk/tempo-web-ui';
-import { type BatchesView } from '../ystate/bridge-batches.js';
 import { asciiBar, timeLeft, UNKNOWN_BAR } from './ascii.js';
 import { blockText, idRange } from './format.js';
 import { type Line, lineOf } from './request-line.js';
@@ -35,16 +36,10 @@ export interface WaitingRow {
     shown: boolean;
 }
 
-/** A value and when it arrived, in ms since the epoch. */
-export interface Arrived<T> {
-    value: T;
-    atMs: number;
-}
-
 /** What the rows are built from. */
 export interface WaitingRowsInput {
     /** The view the batches machine last read, and when. */
-    view: Arrived<BatchesView>;
+    view: Arrived<ProofQueueBatchesView>;
     /** Nori's `state.bridge`, while its websocket is open. */
     bridge?: Arrived<NoriBridgeInfraState>;
     /** Nori's timings, while its websocket is open. */

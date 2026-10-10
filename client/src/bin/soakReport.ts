@@ -146,7 +146,11 @@ const out: string[] = [
     '```',
 ];
 console.log(out.join('\n'));
-const keeper = await Keeper.connect(config);
-await keeper.status();
-console.log('```');
-process.exit(0);
+const keeper = Keeper.connect(config);
+keeper.status$().subscribe({
+    complete: () => {
+        console.log('```');
+        keeper.close();
+        process.exit(0);
+    },
+});

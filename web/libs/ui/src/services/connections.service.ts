@@ -1,20 +1,7 @@
 import { Injectable } from '@yaw-rx/core';
+import { combineLatest, distinctUntilChanged, EMPTY, map, Observable } from 'rxjs';
 import {
-    catchError,
-    combineLatest,
-    distinctUntilChanged,
-    EMPTY,
-    filter,
-    from,
-    map,
-    merge,
-    Observable,
-    shareReplay,
-    startWith,
-    Subject,
-    switchMap,
-} from 'rxjs';
-import {
+    type ConnectionStatusState,
     createConnections,
     DEFAULT_NORI_WEBSOCKET_URL,
     PUBLIC_TEMPO_NETWORKS,
@@ -24,6 +11,8 @@ import {
     type EthereumWalletState,
     type HttpConnectionState,
     type ProofRequestHistoryAddresses,
+    type WalletAccountState,
+    walletStatus,
 } from '@nori-zk/nori-bridge-tempo-sdk';
 
 /** The options `ConnectionsService` starts the connections with. */
@@ -35,6 +24,47 @@ export type ConnectionsOptions = TransportOptions & {
 /** DI token for the options `ConnectionsService` starts the connections with. */
 export const PROOF_REQUEST_CONNECTIONS_OPTIONS = Symbol('PROOF_REQUEST_CONNECTIONS_OPTIONS');
 
+/** A pin along the bottom of the page: a connection, the colour of its status, and its page if it has one. */
+export interface ConnectionPin {
+    label: string;
+    colour: 'green' | 'red' | 'blue';
+    /** The connection's page, for a pin that links to one; `''` otherwise. */
+    href: string;
+}
+
+/**
+ * How often each connection is checked, and how long a check may take, unless
+ * the app sets its own: a connection that stops answering turns its pin blue
+ * within 5 seconds (2s to the next check, 3s for the check that gets no answer).
+ */
+const PIN_HEALTH_CHECKS = { intervalMs: 2000, timeoutMs: 3000 };
+
+/** The colour of each node of a connection's status machine. */
+const COLOUR: Record<ConnectionStatusState['node'], ConnectionPin['colour']> = {
+    connected: 'green',
+    unsure: 'blue',
+    down: 'red',
+    closed: 'red',
+};
+
+/**
+ * A connection's pin, from its status.
+ *
+ * @param label What the pin names.
+ * @param status$ The connection's status.
+ * @param href The connection's page, or `''`.
+ * @returns The pin, each time its colour changes.
+ */
+const pin$ = (
+    label: string,
+    status$: Observable<{ node: ConnectionStatusState['node'] }>,
+    href = '',
+): Observable<ConnectionPin> =>
+    status$.pipe(
+        map(({ node }) => ({ label, colour: COLOUR[node], href })),
+        distinctUntilChanged((a, b) => a.colour === b.colour),
+    );
+
 /**
  * The network, the Ethereum wallet, the Tempo RPC that every proof request
  * read goes through, and Nori's websocket, all from `createConnections`. One
@@ -44,43 +74,27 @@ export const PROOF_REQUEST_CONNECTIONS_OPTIONS = Symbol('PROOF_REQUEST_CONNECTIO
 export class ConnectionsService {
     /** Everything `createConnections` opened: network, Ethereum, Tempo and Nori. */
     readonly connections: Connections;
-    /**
-     * The wallet's first account, or an empty string while it has shared
-     * none. Read on each entry into the wallet's `ready` and each background
-     * check there, and as soon as the user shares one.
-     */
-    readonly account$: Observable<string>;
-    /** The accounts the wallet returned when the user was asked to share one. */
-    private readonly accountsShared$ = new Subject<unknown>();
+    /** The account machine's states: the account the wallet shares, and asking it to share one. */
+    readonly accountState$: Observable<WalletAccountState>;
 
     /**
      * @param options The Ethereum chain, the Tempo chain, Nori's websocket, the queue and bridge, and optional timings.
      */
     constructor(readonly options: ConnectionsOptions) {
-        this.connections = createConnections(options);
-        this.account$ = merge(
-            this.walletState$.pipe(
-                filter((state) => state.node === 'ready'),
-                switchMap(() => this.walletRequest$('eth_accounts')),
-            ),
-            this.accountsShared$,
-        ).pipe(
-            map((accounts) => (Array.isArray(accounts) ? String(accounts[0] ?? '') : '')),
-            startWith(''),
-            distinctUntilChanged(),
-            shareReplay({ bufferSize: 1, refCount: false }),
-        );
+        this.connections = createConnections({
+            ...options,
+            healthChecks: { ...PIN_HEALTH_CHECKS, ...options.healthChecks },
+        });
+        this.accountState$ = this.wallet.account?.state$ ?? EMPTY;
     }
 
     /**
-     * Asks the wallet to share an account (`eth_requestAccounts`). The
-     * account arrives through `account$`; a refusal leaves it empty.
+     * Asks the wallet to share an account, while it shares none or after the
+     * user declined. The account arrives in the account machine's state.
      * @returns {void}
      */
     connectAccount(): void {
-        this.walletRequest$('eth_requestAccounts').subscribe((accounts) =>
-            this.accountsShared$.next(accounts),
-        );
+        this.wallet.account?.shareAccount();
     }
 
     /** The user's wallet, which Ethereum reads and the snapshot transaction go through. */
@@ -93,34 +107,40 @@ export class ConnectionsService {
         return this.wallet.connection?.state$ ?? EMPTY;
     }
 
-    /** Whether Ethereum's public RPC is `ready`; always `false` when the app gives none. */
-    get ethereumHttpReady$(): Observable<boolean> {
-        const http = this.connections.ethereum.http.connection;
-        return (http?.state$ ?? EMPTY).pipe(
-            map((state) => state.node === 'ready'),
-            startWith(false),
-            distinctUntilChanged(),
-        );
-    }
-
     /** Tempo's http connection machine's states. */
     get tempoHttpState$(): Observable<HttpConnectionState<EthereumHealth>> {
         return this.connections.tempo.http.connection?.state$ ?? EMPTY;
     }
 
-    /** Whether reads can run on both chains: Ethereum's RPC or wallet, and Tempo's http, are `ready`. */
+    /** Whether reads can run on both chains: both are connected. */
     get ready$(): Observable<boolean> {
         return combineLatest([
-            this.ethereumHttpReady$,
-            this.walletState$,
-            this.tempoHttpState$,
+            this.connections.ethereum.status.connection.state$,
+            this.connections.tempo.status.connection.state$,
         ]).pipe(
-            map(
-                ([ethereumHttp, wallet, tempo]) =>
-                    (ethereumHttp || wallet.node === 'ready') && tempo.node === 'ready',
-            ),
+            map(([ethereum, tempo]) => ethereum.node === 'connected' && tempo.node === 'connected'),
             distinctUntilChanged(),
         );
+    }
+
+    /**
+     * The connection pins, in order, each from its connection's status: the
+     * network, Ethereum, Tempo, Nori's websocket (linked to its page), and
+     * the wallet when the app configures one.
+     */
+    get pins$(): Observable<ConnectionPin[]> {
+        const { network, ethereum, tempo, nori } = this.connections;
+        const { connection: wallet } = ethereum.wallet;
+        return combineLatest([
+            pin$('Network', network.status.connection.state$),
+            pin$('Ethereum', ethereum.status.connection.state$),
+            pin$('Tempo', tempo.status.connection.state$),
+            // Nori's websocket page: its `wss://` URL over `https://`.
+            pin$('Nori', nori.status.connection.state$, this.noriUrl.replace(/^ws/, 'http')),
+            ...(wallet === undefined
+                ? []
+                : [pin$('Wallet', wallet.state$.pipe(walletStatus('ethereum.wallet')))]),
+        ]);
     }
 
     /** The public Tempo network reads go to, or its chain id for any other chain. */
@@ -136,20 +156,6 @@ export class ConnectionsService {
     /** Nori's websocket URL. */
     get noriUrl(): string {
         return this.options.nori?.websocket?.url ?? DEFAULT_NORI_WEBSOCKET_URL;
-    }
-
-    /**
-     * One request to the wallet while it is `ready`.
-     *
-     * @param method The request's method; it takes no params.
-     * @returns The wallet's answer, or nothing when it is not ready or refuses.
-     */
-    private walletRequest$(method: string): Observable<unknown> {
-        return from(
-            this.wallet
-                .ready()
-                .then(async (provider): Promise<unknown> => provider.send(method, [])),
-        ).pipe(catchError(() => EMPTY));
     }
 
     /**

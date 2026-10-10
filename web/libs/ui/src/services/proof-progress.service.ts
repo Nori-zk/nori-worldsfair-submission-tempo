@@ -1,13 +1,26 @@
 import { Injectable } from '@yaw-rx/core';
-import { distinctUntilChanged, Observable, of, shareReplay, switchMap } from 'rxjs';
+import { distinctUntilChanged, map, Observable, of, shareReplay, switchMap } from 'rxjs';
 import {
     createProofRequestStateMachine,
     createUnprocessedProofRequestStateMachine,
+    ProofRequestState,
     type ProofRequestStateNodeUnion,
     type UnprocessedProofRequestStateNodeUnion,
 } from '@nori-zk/nori-bridge-tempo-sdk';
 import { ConnectionsService } from './connections.service.js';
 import { NoriBridgeInfraService } from './nori-bridge-infra.service.js';
+
+/**
+ * The block an unprocessed request was enqueued in: while the proof request
+ * machine holds it as `unprocessed`, read or being read again.
+ *
+ * @param request The proof request machine's state.
+ * @returns The block, or `undefined` while the request is not known to be unprocessed.
+ */
+const unprocessedBlockOf = (request: ProofRequestStateNodeUnion): bigint | undefined =>
+    'snapshot' in request.data && request.data.snapshot.state === ProofRequestState.Unprocessed
+        ? request.data.snapshot.requestBlockNumber
+        : undefined;
 
 /** One followed proof request: its state, its bridge progress while unprocessed, and its controls. */
 export interface FollowedProof {
@@ -49,23 +62,24 @@ export class ProofProgressService {
         if (existing) return existing;
 
         const { connections, options } = this.connections;
-        const { proofRequestState, retry, close } = createProofRequestStateMachine(
+        const proofRequest = createProofRequestStateMachine(
             connections,
             { ...options.proofRequests, proofRequestTxHash: txHash },
             undefined,
             15_000,
             this.noriBridgeInfra.state$,
         );
-        const request$ = proofRequestState.state$.pipe(
+        const request$ = proofRequest.state$.pipe(
             shareReplay({ bufferSize: 1, refCount: false }),
         );
         const progress$ = request$.pipe(
-            distinctUntilChanged((previous, current) => previous.node === current.node),
-            switchMap((request) =>
-                request.node === 'unprocessed'
+            map(unprocessedBlockOf),
+            distinctUntilChanged(),
+            switchMap((requestBlockNumber) =>
+                requestBlockNumber !== undefined
                     ? new Observable<UnprocessedProofRequestStateNodeUnion>((subscriber) => {
                           const unprocessed = createUnprocessedProofRequestStateMachine(
-                              Number(request.data.requestBlockNumber),
+                              Number(requestBlockNumber),
                               connections.nori,
                           )
                               .close()
@@ -80,7 +94,12 @@ export class ProofProgressService {
             ),
             shareReplay({ bufferSize: 1, refCount: true }),
         );
-        const proof = { request$, progress$, retry, close };
+        const proof = {
+            request$,
+            progress$,
+            retry: () => proofRequest.retry(),
+            close: () => proofRequest.close(),
+        };
         this.followed.set(txHash, proof);
         return proof;
     }

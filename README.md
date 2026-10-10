@@ -22,7 +22,7 @@ Addresses and numbers: [docs/README.md](docs/README.md).
 | `client/`       | Sample TS client and keeper CLI: create-guards, snapshot, checkpoint, submit, status, unlatch, run                                     |
 | `web/`          | Browser apps: prove an Ethereum balance on Tempo, and a live dashboard of the proof queue ([README](web/README.md))                    |
 | `test-vectors/` | Test data shared by the contract and client tests                                                                                      |
-| `scripts/`      | `dry-run.sh` (the whole loop locally), `deploy-moderato.sh` (Backstop + demo token), `soak.sh` (keeper for hours, then a report)       |
+| `scripts/`      | `dry-run.sh` (the whole loop locally), `dev-local.sh` (the web apps on local chains), `outage.sh` (freeze or resume a local chain), `local-chains.sh` (the chains both start), `deploy-moderato.sh` (Backstop + demo token), `soak.sh` (keeper for hours, then a report) |
 | `docs/`         | [Index of all docs](docs/README.md), diagrams, deployments                                                                             |
 
 ## Run
@@ -34,11 +34,13 @@ anvil --network tempo &  # the tempo/ tests' local node
 npm test                 # ethereum contracts, the tempo contracts, then the client
 npm run lint             # every workspace
 scripts/dry-run.sh       # the whole loop on local chains, with a fake prover
+npm run dev:local        # the web apps on local chains
+npm run outage -- eth|tempo down|up  # freeze or resume one of those chains
 ```
 
 Toolchain notes: [AGENTS.md](AGENTS.md).
-The Nori SDK is the sibling checkout `../nori-tempo-sdk`, referenced by path from each
-`package.json`; build it first (its README).
+The Nori SDK comes from npm: each `package.json` pins its packages to exact versions
+from one release of `../nori-tempo-sdk`.
 
 ## Apps
 
