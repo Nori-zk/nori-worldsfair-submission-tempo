@@ -20,7 +20,7 @@
     },
     "dependencies": {
         "@nori-zk/ethereum-tempo-bridge": "0.0.1",
-        "@nori-zk/nori-bridge-tempo-sdk": "0.1.0",
+        "@nori-zk/nori-bridge-tempo-sdk": "0.1.1",
         "@nori-zk/tempo-web-ui": "*",
         "@yaw-rx/core": "^0.1.4",
         "@yaw-rx/ystate": "^0.1.0",
