@@ -5,6 +5,8 @@
 #
 # The sourcing script sets ETH_FORK_RPC, TEMPO_FORK_RPC and KEEP (1 leaves the
 # chains running at exit), and may add ports to EXTRA_PORTS for cleanup to free.
+# MIGRATION=1 also deploys DUSD, the ERC-20 the migrate app moves to Tempo,
+# and has Nori adopt the issuer's TIP-20 of it (use_bridge_with_adopt first).
 #
 # Needs: npm install && npm run build (once), anvil and cast (Foundry, with
 # `anvil --network tempo`). Uses a temp dir; it ignores your .env.
@@ -15,6 +17,12 @@ ETH_URL=http://127.0.0.1:18545
 TEMPO_URL=http://127.0.0.1:18546
 # Hardhat's and anvil's public test key 0
 DEV_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+# Test keys 1 and 2: the issuer of the migrated ERC-20, and a holder
+ISSUER_KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
+HOLDER_KEY=0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a
+# Local Ethereum's chain id: not local Tempo's 31337, so one wallet can tell
+# the two chains apart (the migrate app signs on both)
+ETH_LOCAL_CHAIN_ID=1337
 # Foundry's own install dir (foundryup), when it is not on PATH
 FOUNDRY_BIN=${FOUNDRY_DIR:-$HOME/.foundry}/bin
 [ -d "$FOUNDRY_BIN" ] && export PATH="$PATH:$FOUNDRY_BIN"
@@ -88,7 +96,7 @@ MULTICALL3_ADDRESS=0xcA11bde05977b3631167028862bE2a173976CA11
 start_chains() {
     say "Starting chains (logs in $W)"
     if [ -n "$ETH_FORK_RPC" ]; then ETH_SOURCE=(--fork "$ETH_FORK_RPC"); else ETH_SOURCE=(); fi
-    (cd "$REPO/ethereum" && ETH_NETWORK=hardhat exec npx hardhat node "${ETH_SOURCE[@]}" --port 18545) >"$W/ethereum.log" 2>&1 &
+    (cd "$REPO/ethereum" && ETH_NETWORK=hardhat exec npx hardhat node "${ETH_SOURCE[@]}" --chain-id "$ETH_LOCAL_CHAIN_ID" --port 18545) >"$W/ethereum.log" 2>&1 &
     PIDS+=($!)
     # A fork keeps the local chain id, which deployNoriBridge requires
     if [ -n "$TEMPO_FORK_RPC" ]; then TEMPO_SOURCE=(--fork-url "$TEMPO_FORK_RPC" --chain-id 31337); else TEMPO_SOURCE=(); fi
@@ -114,6 +122,32 @@ start_chains() {
     echo "Tempo: anvil --network tempo on $TEMPO_URL, state from ${TEMPO_FORK_RPC:-nowhere (offline)}"
 }
 
+# The Nori bridge with adoptMirror (@nori-zk/tempo-token-bridge 0.0.3): the
+# installed package once it has it, otherwise the artifact committed in a
+# nori-tempo-sdk checkout next to this repo (or at NORI_TEMPO_SDK), which
+# deployNoriBridge deploys instead (NORI_TEMPO_BRIDGE_ARTIFACT).
+use_bridge_with_adopt() {
+    if (cd "$REPO/tempo" && node -e "import('@nori-zk/tempo-token-bridge').then((m) => process.exit(m.NoriTempoTokenBridge__factory.createInterface().getFunction('adoptMirror') ? 0 : 1))" 2>/dev/null); then
+        return
+    fi
+    local sdk=${NORI_TEMPO_SDK:-$REPO/../nori-tempo-sdk}
+    export NORI_TEMPO_BRIDGE_ARTIFACT=$sdk/tempo/artifacts/contracts/NoriTempoTokenBridge.sol/NoriTempoTokenBridge.json
+    if ! grep -q adoptMirror "$NORI_TEMPO_BRIDGE_ARTIFACT" 2>/dev/null; then
+        echo "The installed @nori-zk/tempo-token-bridge has no adoptMirror (0.0.3), and $NORI_TEMPO_BRIDGE_ARTIFACT"
+        echo "is missing or older. Check out nori-tempo-sdk's issuer-owned mirrors there, or set NORI_TEMPO_SDK."
+        exit 1
+    fi
+}
+
+# Deploys DUSD on Ethereum as the issuer, minting 1,000,000 to $1, and
+# exports NORI_ETH_ISSUER_TOKEN_ADDRESS.
+deploy_issuer_token() {
+    (cd "$REPO/ethereum" && ETH_PRIVATE_KEY=$ISSUER_KEY quiet npx hardhat --network localfork deployIssuerToken 1000000 --holder "$1" | grep -oE "DemoIssuerToken DUSD deployed to 0x[0-9a-fA-F]+")
+    set -a
+    . "$W/.env.nori-eth-migration"
+    set +a
+}
+
 # Builds and deploys every contract, and exports their addresses.
 deploy_contracts() {
     say "Building the contracts and the keeper"
@@ -131,8 +165,17 @@ deploy_contracts() {
     . "$W/.env.nori-eth-token-bridge"
     set +a
 
-    say "Tempo: deploying the Nori bridge proving that queue, with a mirror of the lockbox, Backstop and a demo token with supply 116,700"
-    (cd "$REPO/tempo" && quiet npx hardhat --network localnet deployNoriBridge "$NORI_ETH_PROOF_QUEUE_ADDRESS" "$NORI_ETH_TOKEN_BRIDGE_ADDRESS" --mirror "$NORI_ETH_DEMO_LOCKBOX_ADDRESS" | grep -oE "(NoriTempoTokenBridge|Mirror of) 0x[0-9a-fA-F]+(: 0x[0-9a-fA-F]+)?")
+    local adopt=()
+    if [ "${MIGRATION:-0}" = 1 ]; then
+        say "Ethereum: the issuer deploys DUSD and mints 1,000,000 to test key 0, the wallet's account"
+        deploy_issuer_token "$(cast wallet address "$DEV_KEY")"
+        adopt=(--adopt "$NORI_ETH_ISSUER_TOKEN_ADDRESS")
+    fi
+
+    local adopted=''
+    [ "${#adopt[@]}" -gt 0 ] && adopted=", DUSD's TIP-20 (created by its issuer, adopted by Nori)"
+    say "Tempo: deploying the Nori bridge proving that queue, with a mirror of the lockbox$adopted, Backstop and a demo token with supply 116,700"
+    (cd "$REPO/tempo" && quiet npx hardhat --network localnet deployNoriBridge "$NORI_ETH_PROOF_QUEUE_ADDRESS" "$NORI_ETH_TOKEN_BRIDGE_ADDRESS" --mirror "$NORI_ETH_DEMO_LOCKBOX_ADDRESS" "${adopt[@]}" | grep -oE "(NoriTempoTokenBridge 0x[0-9a-fA-F]+|Mirror of .*)")
     (cd "$REPO/tempo" && quiet npx hardhat --network localnet deploy | grep -oE "Backstop deployed to: 0x[0-9a-fA-F]+")
     (cd "$REPO/tempo" && quiet npx hardhat --network localnet deployDemo 116700 | grep -oE "Demo token 0x[0-9a-fA-F]+")
     set -a
@@ -142,8 +185,15 @@ deploy_contracts() {
     set +a
 }
 
-# Writes $W/keeper.json: the demo guard over the lockbox, and its mirror.
+# Writes $W/keeper.json: the demo guard over the lockbox, and its mirror (and DUSD's, with MIGRATION=1).
 write_keeper_config() {
+    local mirrors="{ \"name\": \"lockbox-mirror\", \"ethToken\": \"$NORI_ETH_DEMO_LOCKBOX_ADDRESS\" }"
+    if [ -n "${NORI_ETH_ISSUER_TOKEN_ADDRESS:-}" ]; then
+        mirrors+=", { \"name\": \"dusd\", \"ethToken\": \"$NORI_ETH_ISSUER_TOKEN_ADDRESS\" }"
+    fi
+    # Offline (no fork), the sdk probes the local nodes for connectivity, not public endpoints
+    local network=''
+    if [ -z "$ETH_FORK_RPC" ]; then network=", \"network\": { \"probeUrls\": [\"$ETH_URL\", \"$TEMPO_URL\"] }"; fi
     cat >"$W/keeper.json" <<EOF
 {
   "ethereum": { "rpcUrl": "$ETH_URL", "chainId": "$(cast chain-id --rpc-url "$ETH_URL")", "noriSnapshot": "$NORI_ETH_SNAPSHOT_ADDRESS", "proofQueue": "$NORI_ETH_PROOF_QUEUE_ADDRESS", "tokenBridge": "$NORI_ETH_TOKEN_BRIDGE_ADDRESS" },
@@ -157,7 +207,7 @@ write_keeper_config() {
     "backingDecimals": 18, "tolerance": "1000000",
     "windowSecs": 600, "skewSecs": 5, "checkpointIntervalSecs": 5, "maxStalenessSecs": 7200
   }],
-  "mirrors": [{ "name": "lockbox-mirror", "ethToken": "$NORI_ETH_DEMO_LOCKBOX_ADDRESS" }]
+  "mirrors": [$mirrors]$network
 }
 EOF
     echo "Keeper config: $W/keeper.json"

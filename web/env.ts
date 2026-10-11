@@ -16,6 +16,8 @@ export interface WebEnv {
         proofQueueDeployBlock: number;
         /** The `NoriSnapshot` address. */
         snapshotAddress: string;
+        /** The `NoriTokenBridge` holders lock ERC-20s in, or `''` where no app needs it (the migrate app does). */
+        tokenBridgeAddress: string;
     };
     tempo: {
         /** The Tempo chain the reads expect. */
@@ -31,9 +33,14 @@ export interface WebEnv {
         /** The bridge's websocket, for the live processing stages. */
         wssUrl: string;
     };
+    migration: {
+        /** The Ethereum ERC-20 the migrate app moves to its TIP-20 on Tempo, or `''` where no app needs it. */
+        token: string;
+    };
     /** Each app's and dashboard's address, for the links along the top of every page. */
     urls: {
         proveBalance: string;
+        migrate: string;
         dashboard: string;
         /** The Solana submission's bridge dashboard, or `''` to leave its link out. */
         solanaDashboard: string;
@@ -83,6 +90,8 @@ export function loadWebEnv(): WebEnv {
             throw new WebEnvError(name, 'is not an EVM address');
         }
     };
+    const readOptionalEthAddress = (name: string): string =>
+        process.env[name] || file[name] ? readEthAddress(name) : '';
     const readUrl = (name: string, schemes: RegExp, expected: string): string => {
         const url = read(name);
         if (!schemes.test(url)) throw new WebEnvError(name, `is not ${expected}`);
@@ -98,6 +107,7 @@ export function loadWebEnv(): WebEnv {
             proofQueueAddress: readEthAddress('NORI_ETH_PROOF_QUEUE_ADDRESS'),
             proofQueueDeployBlock: readInteger('NORI_WEB_PROOF_QUEUE_DEPLOY_BLOCK'),
             snapshotAddress: readEthAddress('NORI_ETH_SNAPSHOT_ADDRESS'),
+            tokenBridgeAddress: readOptionalEthAddress('NORI_ETH_TOKEN_BRIDGE_ADDRESS'),
         },
         tempo: {
             chainId: readInteger('TEMPO_CHAIN_ID'),
@@ -108,8 +118,12 @@ export function loadWebEnv(): WebEnv {
         bridge: {
             wssUrl: readUrl('NORI_WEB_BRIDGE_WSS_URL', WS, 'a ws:// or wss:// URL'),
         },
+        migration: {
+            token: readOptionalEthAddress('NORI_WEB_MIGRATION_TOKEN'),
+        },
         urls: {
             proveBalance: readUrl('NORI_WEB_PROVE_BALANCE_URL', HTTP, 'an http:// or https:// URL'),
+            migrate: readUrl('NORI_WEB_MIGRATE_URL', HTTP, 'an http:// or https:// URL'),
             dashboard: readUrl('NORI_WEB_DASHBOARD_URL', HTTP, 'an http:// or https:// URL'),
             solanaDashboard:
                 process.env.NORI_WEB_SOLANA_DASHBOARD_URL || file.NORI_WEB_SOLANA_DASHBOARD_URL

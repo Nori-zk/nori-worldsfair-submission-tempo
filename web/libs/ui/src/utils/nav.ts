@@ -18,6 +18,7 @@ export interface NavLink {
 export function navLinks(urls: typeof NORI_WEB_ENV.urls, heading: string): NavLink[] {
     const links: [label: string, url: string][] = [
         ['Prove balance', urls.proveBalance],
+        ['Migrate', urls.migrate],
         ['Bridge dashboard', urls.dashboard],
         ['Solana dashboard', urls.solanaDashboard],
     ];

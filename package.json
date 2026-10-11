@@ -9,6 +9,7 @@
         "keeper",
         "web/libs/ui",
         "web/apps/prove-balance",
+        "web/apps/migrate",
         "web/dashboards/bridge"
     ],
     "devDependencies": {

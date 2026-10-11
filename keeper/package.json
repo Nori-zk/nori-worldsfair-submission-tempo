@@ -9,6 +9,10 @@
     "exports": {
         ".": {
             "import": "./build/index.js"
+        },
+        "./migration": {
+            "types": "./build/migration/index.d.ts",
+            "import": "./build/migration/index.js"
         }
     },
     "scripts": {

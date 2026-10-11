@@ -46,30 +46,16 @@ done
 
 . "$(dirname "$0")/local-chains.sh"
 
-# Anvil's and Hardhat's public test keys: Nori (0) deploys the bridges and
-# relays pauses, the issuer (1) owns DUSD on both chains, the holder (2)
-# migrates
-NORI_KEY=$DEV_KEY
-ISSUER_KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
-HOLDER_KEY=0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a
+# The public test keys (local-chains.sh): Nori (0, DEV_KEY) deploys the
+# bridges and relays pauses, the issuer (1) owns DUSD on both chains, the
+# holder (2) migrates
 
 step() {
     say "$*"
     if [ "$YES" = 0 ]; then read -r -p "   press Enter to run " _; fi
 }
 
-# The Nori bridge with adoptMirror: the installed package once it has it,
-# otherwise the artifact committed in a nori-tempo-sdk checkout.
-if ! (cd "$REPO/tempo" && node -e "import('@nori-zk/tempo-token-bridge').then((m) => process.exit(m.NoriTempoTokenBridge__factory.createInterface().getFunction('adoptMirror') ? 0 : 1))" 2>/dev/null); then
-    SDK=${NORI_TEMPO_SDK:-$REPO/../nori-tempo-sdk}
-    export NORI_TEMPO_BRIDGE_ARTIFACT=$SDK/tempo/artifacts/contracts/NoriTempoTokenBridge.sol/NoriTempoTokenBridge.json
-    if ! grep -q adoptMirror "$NORI_TEMPO_BRIDGE_ARTIFACT" 2>/dev/null; then
-        echo "The installed @nori-zk/tempo-token-bridge has no adoptMirror (0.0.3), and $NORI_TEMPO_BRIDGE_ARTIFACT"
-        echo "is missing or older. Check out nori-tempo-sdk's issuer-owned mirrors there, or set NORI_TEMPO_SDK."
-        exit 1
-    fi
-fi
-
+use_bridge_with_adopt
 check_local
 start_chains
 HOLDER=$(cast wallet address "$HOLDER_KEY")
@@ -89,10 +75,7 @@ set -a
 set +a
 
 say "The issuer deploys DUSD on Ethereum (18 decimals, pausable) and mints 1,000,000 to the holder"
-(cd "$REPO/ethereum" && ETH_PRIVATE_KEY=$ISSUER_KEY quiet npx hardhat --network localfork deployIssuerToken 1000000 --holder "$HOLDER" | grep -oE "DemoIssuerToken DUSD deployed to 0x[0-9a-fA-F]+")
-set -a
-. "$W/.env.nori-eth-migration"
-set +a
+deploy_issuer_token "$HOLDER"
 
 say "Tempo: Nori deploys NoriTempoTokenBridge; the issuer creates its own TIP-20 and grants it ISSUER_ROLE, PAUSE_ROLE and UNPAUSE_ROLE; Nori adopts it as DUSD's mirror"
 (cd "$REPO/tempo" && quiet npx hardhat --network localnet deployNoriBridge "$NORI_ETH_PROOF_QUEUE_ADDRESS" "$NORI_ETH_TOKEN_BRIDGE_ADDRESS" --adopt "$NORI_ETH_ISSUER_TOKEN_ADDRESS" | grep -oE "(NoriTempoTokenBridge 0x[0-9a-fA-F]+|Mirror of .*)")
