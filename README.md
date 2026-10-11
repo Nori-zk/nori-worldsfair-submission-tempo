@@ -40,7 +40,7 @@ npm run outage -- eth|tempo down|up  # freeze or resume one of those chains
 
 Toolchain notes: [AGENTS.md](AGENTS.md).
 The Nori SDK comes from npm: each `package.json` pins its packages to exact versions
-from one release of `../nori-tempo-sdk`.
+from one release of [nori-tempo-sdk](https://github.com/Nori-zk/nori-tempo-sdk).
 
 ## Apps
 
@@ -83,7 +83,6 @@ Create guards only after that bridge is deployed: a guard pins it.
 | Keeper, local dry run                                                                   | Built                            |
 | Browser apps: prove a balance, bridge dashboard                                         | Built (Sepolia + Tempo Moderato) |
 | Live loop on Sepolia + Tempo Moderato                                                   | Next                             |
-| `enforce`: pause the TIP-20 when its guard trips                                        | Roadmap                          |
 | Separate warn tolerance (in-flight transfers) from the trip tolerance                   | Roadmap (one `tolerance` today)  |
 | Auto-unlatch for Tempo-only custody; timelocked admin `unlatch`                         | Roadmap (admin `unlatch` today)  |
 | Check the TIP-20's issuer is the expected bridge                                        | Roadmap                          |

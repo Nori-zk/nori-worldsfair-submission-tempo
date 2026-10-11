@@ -16,7 +16,7 @@
 | [web/README.md](../web/README.md)                                               | Browser apps: prove a balance, bridge dashboard                                                         |
 | [test-vectors/nori-snapshot/README.md](../test-vectors/nori-snapshot/README.md) | Test data shared by the contract and keeper tests                                                       |
 
-Upstream: the Nori SDK, the sibling checkout `../nori-tempo-sdk` (its `README.md`,
+Upstream: the Nori SDK, [nori-tempo-sdk](https://github.com/Nori-zk/nori-tempo-sdk) (its `README.md`,
 `sdk/README.md` and `DEPLOYMENT.md`), and the prover, nori-bridge-head on branch
 `FEAT/tempo-bridge-sepolia-glamsterdam`.
 

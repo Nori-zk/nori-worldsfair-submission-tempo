@@ -2,7 +2,6 @@
 
 Nori's Colosseum World's Fair submission (deadline 2026-10-13 06:59 UTC).
 How it works: [docs/how-it-works.drawio.png](docs/how-it-works.drawio.png). All docs: [docs/README.md](docs/README.md).
-Product spec: `../NORI-backstop-spec.md` (outside the repo).
 Status: built and tested on local chains; Sepolia → Tempo Moderato on real proofs is next (addresses in [docs/README.md](docs/README.md)).
 Working in `web/`: also read [web/AGENTS.md](web/AGENTS.md) (yaw + ystate idiom, toolchain, quirks).
 
@@ -11,7 +10,7 @@ Working in `web/`: also read [web/AGENTS.md](web/AGENTS.md) (yaw + ystate idiom,
 Read before writing code: code written first tends to reinvent what already exists.
 
 - This repo: [README.md](README.md), [docs/README.md](docs/README.md), and the README of the part you change.
-- The sdk: the sibling checkout `../nori-tempo-sdk` (Quirks: the sdk from npm): its `AGENTS.md`, `README.md` and `sdk/README.md`. Use what it exports before writing your own; changing it follows its AGENTS.md procedure.
+- The sdk: [nori-tempo-sdk](https://github.com/Nori-zk/nori-tempo-sdk), cloned next to this repo as `../nori-tempo-sdk` (Quirks: the sdk from npm): its `AGENTS.md`, `README.md` and `sdk/README.md`. Use what it exports before writing your own; changing it follows its AGENTS.md procedure.
 - Before any `web/` change: [web/AGENTS.md](web/AGENTS.md) and its full reading list.
 
 ## Layout
