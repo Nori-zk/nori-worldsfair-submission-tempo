@@ -1,4 +1,5 @@
 import { FetchRequest, isError, JsonRpcProvider, type Interface } from 'ethers';
+import { type Connections, createConnections } from '@nori-zk/nori-bridge-tempo-sdk';
 
 /** Any RPC call gives up after this, so a hung connection can't stall the keeper. */
 export const RPC_TIMEOUT_MS = 30_000;
@@ -27,4 +28,31 @@ export function contractErrorName(
     if (error.revert) return error.revert.name;
     if (!error.data) return 'revert without data';
     return contract.parseError(error.data)?.name ?? error.data;
+}
+
+/** Where a chain is read: its RPC URL and the chain id it must serve, as a decimal string. */
+interface ChainConfig {
+    rpcUrl: string;
+    chainId: string;
+}
+
+/** Where the sdk probes for connectivity; local dry runs point it at their own nodes, so they need no internet. */
+export interface NetworkConfig {
+    probeUrls: string[];
+}
+
+/**
+ * The sdk's connections to both chains of a config (the keeper's, or the
+ * migration's), each checked against its chain id.
+ */
+export function connectionsOf(config: {
+    ethereum: ChainConfig;
+    tempo: ChainConfig;
+    network?: NetworkConfig;
+}): Connections {
+    return createConnections({
+        ethereum: { expectedChainId: BigInt(config.ethereum.chainId), http: { rpcUrl: config.ethereum.rpcUrl } },
+        tempo: { expectedChainId: BigInt(config.tempo.chainId), http: { rpcUrl: config.tempo.rpcUrl } },
+        network: config.network,
+    });
 }

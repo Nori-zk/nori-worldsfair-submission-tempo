@@ -1,0 +1,19 @@
+{
+    "ethereum": {
+        "rpcUrl": "${ETH_RPC_URL}",
+        "chainId": "${ETH_CHAIN_ID}",
+        "noriSnapshot": "0x0000000000000000000000000000000000000000",
+        "proofQueue": "${NORI_ETH_PROOF_QUEUE_ADDRESS}",
+        "tokenBridge": "${NORI_ETH_TOKEN_BRIDGE_ADDRESS}"
+    },
+    "tempo": {
+        "rpcUrl": "${TEMPO_RPC_NETWORK_URL}",
+        "chainId": "${TEMPO_CHAIN_ID}",
+        "bridge": "${NORI_TEMPO_TOKEN_BRIDGE_ADDRESS}",
+        "backstop": "0x0000000000000000000000000000000000000000"
+    },
+    "intervals": { "snapshotSecs": 900, "checkpointSecs": 120, "pollSecs": 30 },
+    "stateFile": "keeper-migration-state.json",
+    "guards": [],
+    "mirrors": [{ "name": "dusd", "ethToken": "${NORI_ETH_ISSUER_TOKEN_ADDRESS}" }]
+}

@@ -42,6 +42,23 @@ npm run demo-set -- 223.52 [--paused]
 Config: the repo's `.env` (`../.env.example`). `deploy` writes `.env.nori-eth-snapshot`,
 `deploy-demo` writes `.env.nori-eth-demo`; the later commands and the keeper read them.
 
+## Migration demo: DUSD
+
+`DemoIssuerToken` is the ERC-20 an issuer migrates to Tempo in the demo
+([docs/tempo-migration.md](../docs/tempo-migration.md)): OpenZeppelin `ERC20`,
+`AccessControl`, `Pausable` and `Burnable`, 18 decimals, as Tempo's migration guide
+starts from. Holders lock it in nori-tempo-sdk's `NoriTokenBridge`; its `paused()` is
+what reaches its TIP-20 on Tempo.
+
+```sh
+npm run deploy-issuer-token -- 1000000 --holder 0x...   # testnet only -> .env.nori-eth-migration
+npm run issuer-pause [-- --unpause]                     # as the issuer
+```
+
+`test/DemoIssuerToken.ts` runs it on the sdk's real `NoriTokenBridge` and queue: the
+issuer's roles, 18 decimals locked as 6-decimal bridge units with dust refused, the
+proven leaf and slot of a lock, and a pause that blocks locks and is synced for proving.
+
 ## Cost (mainnet fork, queue fee 0)
 
 | Snapshot   | Gas     | ~USD (1.08 gwei, ETH $2,707) |

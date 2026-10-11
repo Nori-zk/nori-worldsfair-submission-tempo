@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { encodeQueryData, queryIdOf } from '@nori-zk/ethereum-snapshot';
 import type { GuardConfig } from '../backstop.js';
+import type { NetworkConfig } from './tempo.js';
 
 export interface QueryConfig {
     target: string;
@@ -57,6 +58,8 @@ export interface KeeperConfig {
     stateFile: string;
     guards: GuardEntry[];
     mirrors?: MirrorEntry[];
+    /** Where the sdk probes for connectivity (default: public endpoints). */
+    network?: NetworkConfig;
 }
 
 /**
@@ -69,8 +72,10 @@ export function loadEnv() {
         '.env',
         'ethereum/.env.nori-eth-snapshot',
         'ethereum/.env.nori-eth-demo',
+        'ethereum/.env.nori-eth-migration',
         'tempo/.env.nori-tempo-backstop',
         'tempo/.env.nori-tempo-demo',
+        'tempo/.env.nori-tempo-migration',
     ]) {
         const path = fileURLToPath(
             new URL(`../../../${file}`, import.meta.url)
@@ -84,11 +89,11 @@ export function loadEnv() {
 }
 
 /**
- * Reads the keeper config, replacing each ${VAR} in its strings with that
- * environment variable. The keys come from ETH_PRIVATE_KEY and
- * TEMPO_PRIVATE_KEY.
+ * Reads a config (the keeper's, or the migration's), replacing each ${VAR}
+ * in its strings with that environment variable. The keys come from
+ * ETH_PRIVATE_KEY and TEMPO_PRIVATE_KEY.
  */
-export function loadConfig(path: string): KeeperConfig {
+export function loadConfig<TConfig = KeeperConfig>(path: string): TConfig {
     const expand = (value: unknown): unknown => {
         if (typeof value === 'string')
             return value.replace(/\$\{(\w+)\}/g, (_, name: string) => {
@@ -103,7 +108,7 @@ export function loadConfig(path: string): KeeperConfig {
             );
         return value;
     };
-    return expand(JSON.parse(readFileSync(path, 'utf8'))) as KeeperConfig;
+    return expand(JSON.parse(readFileSync(path, 'utf8'))) as TConfig;
 }
 
 export function queryOf(query: QueryConfig) {

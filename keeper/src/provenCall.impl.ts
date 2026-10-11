@@ -1,28 +1,28 @@
 import { type Signer } from 'ethers';
 import { EMPTY, filter, map, type Observable, ReplaySubject, shareReplay, Subject, switchMap, take } from 'rxjs';
-import { PAUSE_STATE_PAUSED } from '@nori-zk/ethereum-tempo-bridge';
 import {
-    applyPauseCall,
     createSignerTransactionMachine,
     type ProofRequestConnections,
     tokenBridgeInterface,
+    type TransactionCall,
     type VerifiedRequestWitness,
 } from '@nori-zk/nori-bridge-tempo-sdk';
-import { PAUSE_KEY } from '@nori-zk/tempo-token-bridge';
-import { closeWhenEnded } from '../owned.js';
-import { type ProvenRequestState } from '../provenRequest.js';
-import { createProvenRequestMachine } from '../provenRequest.impl.js';
-import { PauseApplicationGraph } from './pauseApplication.js';
-import { keepSending, sendOutcomeOf, sendOver } from './sends.js';
+import { keepSending, sendOutcomeOf, sendOver } from './keeper/sends.js';
+import { closeWhenEnded } from './owned.js';
+import { ProvenCallGraph } from './provenCall.js';
+import { type ProvenRequestState } from './provenRequest.js';
+import { createProvenRequestMachine } from './provenRequest.impl.js';
 
-/** The `syncPause` transaction and the bridges on both chains. */
-export interface PauseApplicationRequest {
-    syncPauseTxHash: string;
+/** The transaction that enqueued the proof request, the bridges, and the call that takes its proven leaf. */
+export interface ProvenCallRequest {
+    proofRequestTxHash: string;
     proofQueue: string;
-    /** The `NoriTokenBridge` on Ethereum, whose pause states the proof covers. */
-    tokenBridge: string;
-    /** The `NoriTempoTokenBridge` that proves the queue and applies the pause. */
+    /** The `NoriTempoTokenBridge` that proves the queue and takes the call. */
     tempoBridge: string;
+    /** Whether the proven request is one the call takes (the leaf it expects). */
+    takes: (witness: VerifiedRequestWitness) => boolean;
+    /** The call, from the request's witness and the batch holding it (`applyPauseCall`, `mintERC20Call`). */
+    callOf: (witness: VerifiedRequestWitness, proofQueueBatchIndex: bigint) => TransactionCall;
 }
 
 /** The proven request machine once proven. */
@@ -40,45 +40,34 @@ type Send = ReturnType<typeof createSignerTransactionMachine>;
 const proven = (state: ProvenRequestState): state is Proven => state.node === 'proven';
 
 /**
- * Starts following one `syncPause` transaction the keeper sent: until Nori
- * has proven its batch, then `applyPause` sent with the keeper's signer
- * until mined or refused. The proven request machine starts at once from
- * the sync transaction; the `applyPause` transaction starts from the proven
- * pause state, its input, once that is known, and is sent at once. The
- * flow's own steps gate on their states.
+ * Starts following one proof request: until Nori has proven its batch, then
+ * the call that takes its proven leaf sent with `signer` until mined or
+ * refused. The proven request machine starts at once from the transaction;
+ * the call's transaction starts from the proven leaf, its input, once that
+ * is known, and is sent at once. The flow's own steps gate on their states.
  *
  * @param connections The Ethereum and Tempo chains, from `createConnections`.
- * @param request The `syncPause` transaction and the bridges.
- * @param signer The keeper's Tempo signer.
+ * @param request The transaction, the bridges and the call.
+ * @param signer The Tempo signer that sends the call.
  * @param resendAfterMs How long a send that failed waits before it is sent again.
  * @param recheckTrigger$ An extra signal to read the proof request again.
- * @returns The running machine; `applied` carries how it ended. Its control:
+ * @returns The running machine; `called` carries how it ended. Its control:
  *   - `close()`: moves the machine to `closed`.
  */
-export function createPauseApplicationMachine(
+export function createProvenCallMachine(
     connections: ProofRequestConnections,
-    request: PauseApplicationRequest,
+    request: ProvenCallRequest,
     signer: Signer,
     resendAfterMs: number,
     recheckTrigger$: Observable<unknown> = EMPTY
 ) {
     const close$ = new Subject<void>();
 
-    /**
-     * Whether a proven request is a pause state of the token bridge.
-     *
-     * @param witness The request's witness.
-     * @returns `true` for the token bridge's `[PAUSE_KEY, token]` leaf.
-     */
-    const isPause = ({ value }: VerifiedRequestWitness) =>
-        value.target.toLowerCase() === request.tokenBridge.toLowerCase() &&
-        value.collectionKeys[0].toLowerCase() === PAUSE_KEY.toLowerCase();
-
     const provenRequest = createProvenRequestMachine(
         connections,
         {
             proofQueueAddress: request.proofQueue,
-            proofRequestTxHash: request.syncPauseTxHash,
+            proofRequestTxHash: request.proofRequestTxHash,
             bridgeAddress: request.tempoBridge,
         },
         recheckTrigger$
@@ -89,7 +78,7 @@ export function createPauseApplicationMachine(
         map(({ data }) => data),
         shareReplay(1)
     );
-    const provenPause$ = proven$.pipe(filter((data) => isPause(data.verifiedWitness)));
+    const provenTaken$ = proven$.pipe(filter((data) => request.takes(data.verifiedWitness)));
 
     /** The proven request machine reaching `node`, once. */
     const provenRequestAt$ = (node: ProvenRequestState['node']): Observable<void> =>
@@ -99,15 +88,15 @@ export function createPauseApplicationMachine(
             map((): void => undefined)
         );
 
-    // The `applyPause` transaction, from the proven pause state.
+    // The call's transaction, from the proven leaf.
     const send = new ReplaySubject<Send>(1);
-    const startSend = provenPause$.subscribe((data) =>
+    const startSend = provenTaken$.subscribe((data) =>
         send.next(
             createSignerTransactionMachine(
                 connections,
                 'tempo',
                 signer,
-                applyPauseCall(request.tempoBridge, data.verifiedWitness, data.proofAvailable.proofQueueBatchIndex),
+                request.callOf(data.verifiedWitness, data.proofAvailable.proofQueueBatchIndex),
                 { errors: tokenBridgeInterface }
             )
         )
@@ -117,7 +106,7 @@ export function createPauseApplicationMachine(
         resendAfterMs
     );
 
-    const machine = PauseApplicationGraph.implement({
+    const machine = ProvenCallGraph.implement({
         requestFound: {
             $: () => provenRequestAt$('waitingForProof'),
             next: () => ({}),
@@ -130,28 +119,28 @@ export function createPauseApplicationMachine(
             $: () => provenRequestAt$('transactionDropped'),
             next: () => ({}),
         },
-        provenPause: {
-            $: () => provenPause$,
+        provenTaken: {
+            $: () => provenTaken$,
             next: (data) => ({
                 proofQueueBatchIndex: data.proofAvailable.proofQueueBatchIndex,
-                paused: BigInt(data.verifiedWitness.value.value) === PAUSE_STATE_PAUSED,
+                value: BigInt(data.verifiedWitness.value.value),
             }),
         },
         provenOther: {
-            $: () => proven$.pipe(filter((data) => !isPause(data.verifiedWitness))),
+            $: () => proven$.pipe(filter((data) => !request.takes(data.verifiedWitness))),
             next: () => ({}),
         },
         sendOver: {
             $: () =>
                 send.pipe(
-                    switchMap((applying) => applying.state$),
+                    switchMap((calling) => calling.state$),
                     filter(sendOver),
                     take(1),
                     map(sendOutcomeOf)
                 ),
             next: (outcome, _dest, source) => ({
                 proofQueueBatchIndex: source.proofQueueBatchIndex,
-                paused: source.paused,
+                value: source.value,
                 outcome,
             }),
         },
@@ -166,7 +155,7 @@ export function createPauseApplicationMachine(
         startSend.unsubscribe();
         sending.unsubscribe();
         provenRequest.close();
-        send.pipe(take(1)).subscribe((applying) => applying.close());
+        send.pipe(take(1)).subscribe((calling) => calling.close());
     });
 
     return Object.assign(running, { close: () => close$.next() });

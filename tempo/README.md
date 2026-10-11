@@ -73,6 +73,14 @@ npm run deploy -w tempo       # Backstop -> tempo/.env.nori-tempo-backstop
 npm run deploy-demo -w tempo -- 116700   # a demo TIP-20 -> tempo/.env.nori-tempo-demo
 ```
 
+`deployNoriBridge` (local dry runs only) deploys nori-tempo-sdk's `NoriTempoTokenBridge`
+on a local node. `--mirror <erc20>` has the bridge create the ERC-20's TIP-20 mirror;
+`--adopt <erc20>` has the issuer (dev account 1) create its own TIP-20, grant the bridge
+`ISSUER_ROLE`, `PAUSE_ROLE` and `UNPAUSE_ROLE`, and the bridge adopt it
+(`scripts/migrate-dry-run.sh`). `adoptMirror` arrives in `@nori-zk/tempo-token-bridge`
+0.0.3; until that is on npm, `NORI_TEMPO_BRIDGE_ARTIFACT` names a nori-tempo-sdk
+checkout's `NoriTempoTokenBridge.json` to deploy instead.
+
 ```
   Kelp replay
       submitRead: 337042 gas (backing), 61063 (pause)

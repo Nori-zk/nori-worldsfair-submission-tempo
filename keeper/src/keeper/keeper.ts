@@ -1,7 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { type Interface, Wallet, type JsonRpcProvider, type Signer } from 'ethers';
 import {
-    catchError,
     combineLatest,
     concatMap,
     defer,
@@ -33,18 +31,18 @@ import {
     PAUSE_STATE_UNPAUSED,
 } from '@nori-zk/ethereum-tempo-bridge';
 import {
+    applyPauseCall,
     changesOf$,
     createChainChangesMachine,
     type ChainChanges,
     createBridgeStateMachine,
-    createConnections,
     createProofQueueHeadMachine,
-    createSignerTransactionMachine,
     type ConnectionName,
     type Connections,
     type TransactionCall,
 } from '@nori-zk/nori-bridge-tempo-sdk';
 import { Backstop__factory, ReadKind } from '@nori-zk/tempo-backstop';
+import { PAUSE_KEY } from '@nori-zk/tempo-token-bridge';
 import { guardStatusName } from '../backstop.js';
 import { guardConfigOf, queryOf, type GuardEntry, type KeeperConfig, type MirrorEntry } from './config.js';
 import { createFeeMachine } from './fee.impl.js';
@@ -52,20 +50,14 @@ import { type GuardState } from './guard.js';
 import { createGuardMachine } from './guard.impl.js';
 import { type MirrorPauseState } from './mirrorPause.js';
 import { createMirrorPauseMachine } from './mirrorPause.impl.js';
-import { type PauseApplicationState } from './pauseApplication.js';
-import { createPauseApplicationMachine } from './pauseApplication.impl.js';
-import {
-    keepSending,
-    type SendLost,
-    sendLost,
-    sendLostReason,
-    type SendOver,
-    sendOutcomeOf,
-    sendOver,
-} from './sends.js';
+import { type ProvenCallState } from '../provenCall.js';
+import { createProvenCallMachine } from '../provenCall.impl.js';
+import { currentData$, currentOf$ } from './reads.js';
+import { type SendEnd, sendOnce$ } from './sends.js';
+import { loadStateFile, updateStateFile } from './stateFile.js';
 import { type SnapshotSubmissionState } from './snapshotSubmission.js';
 import { createSnapshotSubmissionMachine, type GuardRead } from './snapshotSubmission.impl.js';
-import { createProvider } from './tempo.js';
+import { connectionsOf, createProvider } from './tempo.js';
 
 // Contract errors the keeper treats as "nothing to do"
 const READ_NOT_NEWER = 'ReadNotNewer';
@@ -91,45 +83,7 @@ interface KeeperState {
     pausesPending: PendingPause[];
 }
 
-/** How a send ended: over (mined or refused by the contract, `outcome`), or failed to send (`failed`). */
-type SendEnd = { outcome: string } | { failed: string };
-
-/** A running machine, as far as reading its states and closing it go. */
-interface Running<TState> {
-    state$: Observable<TState>;
-    close(): void;
-}
-
-/**
- * Each `current` value a read machine holds, as it changes.
- *
- * @param machine A machine built on `readThroughConnectionsOf`.
- * @returns Its `current` data, each time it is current.
- */
-function currentData$<TState extends { node: string; data: unknown }>(
-    machine: Running<TState>
-): Observable<Extract<TState, { node: 'current' }>['data']> {
-    return machine.state$.pipe(
-        filter((state): state is Extract<TState, { node: 'current' }> => state.node === 'current'),
-        map(({ data }) => data)
-    );
-}
-
-/**
- * The first `current` value a read machine holds, for a one-off command;
- * the machine is closed once it is read.
- *
- * @param machine A machine built on `readThroughConnectionsOf`.
- * @returns Its `current` data, once.
- */
-function currentOf$<TState extends { node: string; data: unknown }>(
-    machine: Running<TState>
-): Observable<Extract<TState, { node: 'current' }>['data']> {
-    return currentData$(machine).pipe(
-        take(1),
-        finalize(() => machine.close())
-    );
-}
+const NO_STATE: KeeperState = { pending: [], pausesPending: [] };
 
 /**
  * Each item of a list in the state file not seen before, re-reading the
@@ -169,13 +123,9 @@ export class Keeper {
     static connect(config: KeeperConfig): Keeper {
         const key = process.env.TEMPO_PRIVATE_KEY;
         if (!key) throw new Error('Missing env: TEMPO_PRIVATE_KEY');
-        const connections = createConnections({
-            ethereum: { expectedChainId: BigInt(config.ethereum.chainId), http: { rpcUrl: config.ethereum.rpcUrl } },
-            tempo: { expectedChainId: BigInt(config.tempo.chainId), http: { rpcUrl: config.tempo.rpcUrl } },
-        });
         return new Keeper(
             config,
-            connections,
+            connectionsOf(config),
             new Wallet(key, createProvider(config.tempo.rpcUrl)),
             createProvider(config.ethereum.rpcUrl)
         );
@@ -206,18 +156,12 @@ export class Keeper {
     }
 
     private loadState(): KeeperState {
-        return {
-            pending: [],
-            pausesPending: [],
-            ...(existsSync(this.config.stateFile)
-                ? (JSON.parse(readFileSync(this.config.stateFile, 'utf8')) as Partial<KeeperState>)
-                : {}),
-        };
+        return loadStateFile(this.config.stateFile, NO_STATE);
     }
 
     /** Applies `change` to the state file as it is now, so what another keeper process added is kept. */
     private updateState(change: (state: KeeperState) => KeeperState) {
-        writeFileSync(this.config.stateFile, JSON.stringify(change(this.loadState()), null, 2) + '\n');
+        updateStateFile(this.config.stateFile, NO_STATE, change);
     }
 
     /** Signals to read a proof request again: each log of the Tempo bridge, a committed batch among them. */
@@ -264,45 +208,7 @@ export class Keeper {
         errors: Interface,
         sent: (hash: string) => void = () => undefined
     ): Observable<SendEnd> {
-        return call$.pipe(
-            take(1),
-            map((call) => ({ call })),
-            catchError((error: unknown) => of({ cannotMake: error instanceof Error ? error.message : String(error) })),
-            switchMap((made): Observable<SendEnd> => {
-                if ('cannotMake' in made) return of({ failed: made.cannotMake });
-                const transaction = createSignerTransactionMachine(this.connections, chain, signer, made.call, {
-                    errors,
-                });
-                // Sent on each entry into `ready`: at once, and again once a connection still
-                // being checked is usable (`notReadyToSend` moves back to `ready` by itself).
-                const sending = keepSending(of([transaction]), this.config.intervals.pollSecs * 1000);
-                return merge(
-                    transaction.state$.pipe(
-                        map((state) => ('transactionHash' in state.data ? state.data.transactionHash : '')),
-                        filter((hash) => hash !== ''),
-                        take(1),
-                        tap(sent),
-                        ignoreElements()
-                    ),
-                    transaction.state$.pipe(
-                        filter(
-                            (state): state is SendOver | SendLost =>
-                                sendOver(state) || (sendLost(state) && state.node !== 'notReadyToSend')
-                        ),
-                        take(1),
-                        map((state): SendEnd =>
-                            sendOver(state) ? { outcome: sendOutcomeOf(state) } : { failed: sendLostReason(state) }
-                        )
-                    )
-                ).pipe(
-                    take(1),
-                    finalize(() => {
-                        sending.unsubscribe();
-                        transaction.close();
-                    })
-                );
-            })
-        );
+        return sendOnce$(this.connections, chain, signer, call$, errors, this.config.intervals.pollSecs * 1000, sent);
     }
 
     /** One guard's machine. */
@@ -647,22 +553,28 @@ export class Keeper {
      * @param untilWaiting Ends once it is looked up and its batch is not proven yet, as a one-off `apply-pauses` does.
      * @returns Its states, until it ends.
      */
-    private pauseApplication$(pause: PendingPause, untilWaiting: boolean): Observable<PauseApplicationState> {
-        const application = createPauseApplicationMachine(
+    private pauseApplication$(pause: PendingPause, untilWaiting: boolean): Observable<ProvenCallState> {
+        const tokenBridge = this.tokenBridgeAddress();
+        const { bridge } = this.config.tempo;
+        const application = createProvenCallMachine(
             this.connections,
             {
-                syncPauseTxHash: pause.syncPauseTxHash,
+                proofRequestTxHash: pause.syncPauseTxHash,
                 proofQueue: this.config.ethereum.proofQueue,
-                tokenBridge: this.tokenBridgeAddress(),
-                tempoBridge: this.config.tempo.bridge,
+                tempoBridge: bridge,
+                // A pause state of the token bridge: its `[PAUSE_KEY, token]` leaf
+                takes: ({ value }) =>
+                    value.target.toLowerCase() === tokenBridge.toLowerCase() &&
+                    value.collectionKeys[0].toLowerCase() === PAUSE_KEY.toLowerCase(),
+                callOf: (witness, proofQueueBatchIndex) => applyPauseCall(bridge, witness, proofQueueBatchIndex),
             },
             this.tempoSigner,
             this.config.intervals.pollSecs * 1000,
             this.bridgeChanged$()
         );
-        const ended = (state: PauseApplicationState) =>
-            state.node === 'applied' ||
-            state.node === 'notAPauseRequest' ||
+        const ended = (state: ProvenCallState) =>
+            state.node === 'called' ||
+            state.node === 'otherRequest' ||
             state.node === 'transactionReplaced' ||
             state.node === 'transactionDropped' ||
             (untilWaiting && state.node === 'waitingForProof');
@@ -675,7 +587,7 @@ export class Keeper {
             }));
         return application.state$.pipe(
             tap((state) => {
-                if (state.node === 'notAPauseRequest') {
+                if (state.node === 'otherRequest') {
                     this.log(`${pause.name}: ${pause.syncPauseTxHash} is not a pause request of the token bridge, dropped`);
                     drop();
                 }
@@ -685,8 +597,9 @@ export class Keeper {
                     );
                     drop();
                 }
-                if (state.node !== 'applied') return;
-                const { outcome, paused, proofQueueBatchIndex } = state.data;
+                if (state.node !== 'called') return;
+                const { outcome, value, proofQueueBatchIndex } = state.data;
+                const paused = value === PAUSE_STATE_PAUSED;
                 if (outcome === 'mined')
                     this.log(
                         `${pause.name}: mirror ${paused ? 'paused' : 'unpaused'} (proof queue batch ${proofQueueBatchIndex})`
@@ -816,17 +729,19 @@ export class Keeper {
     }
 
     /**
-     * Checkpoints and snapshots on the configured intervals, follows every
-     * pending snapshot and pause sync until it is applied, syncs each
+     * Checkpoints and snapshots on the configured intervals (while there are
+     * guards: a keeper that only relays mirrors' pauses has none), follows
+     * every pending snapshot and pause sync until it is applied, syncs each
      * mirror's pause state as it changes, and prints each status line when it
      * changes. Never completes.
      */
     run$(): Observable<never> {
         const { snapshotSecs, checkpointSecs, pollSecs } = this.config.intervals;
         const stateFile$ = timer(0, pollSecs * 1000).pipe(map(() => this.loadState()));
+        const guarding = this.config.guards.length > 0;
         return merge(
-            timer(0, checkpointSecs * 1000).pipe(exhaustMap(() => this.checkpoint$())),
-            timer(0, snapshotSecs * 1000).pipe(exhaustMap(() => this.snapshot$())),
+            guarding ? timer(0, checkpointSecs * 1000).pipe(exhaustMap(() => this.checkpoint$())) : EMPTY,
+            guarding ? timer(0, snapshotSecs * 1000).pipe(exhaustMap(() => this.snapshot$())) : EMPTY,
             newItems$(
                 stateFile$.pipe(map(({ pending }) => pending)),
                 (hash) => hash

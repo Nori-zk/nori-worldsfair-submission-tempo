@@ -13,6 +13,7 @@ import { snapshot } from './tasks/snapshot.js';
 import { previewSnapshot } from './tasks/previewSnapshot.js';
 import { deployDemo, demoSet } from './tasks/demo.js';
 import { deployNoriTokenBridge } from './tasks/deployNoriTokenBridge.js';
+import { deployIssuerToken, issuerPause } from './tasks/migration.js';
 
 const logger = new Logger('HardhatConfig');
 
@@ -97,6 +98,8 @@ const config: HardhatUserConfig = {
         deployDemo,
         demoSet,
         deployNoriTokenBridge,
+        deployIssuerToken,
+        issuerPause,
     ],
     plugins: [
         hardhatMocha,

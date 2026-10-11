@@ -18,6 +18,7 @@
         "test-ci": "npm run test",
         "lint": "npx eslint src",
         "keeper": "node --experimental-wasm-modules build/bin/keeper.js",
+        "migrate": "node --experimental-wasm-modules build/bin/migrate.js",
         "fake-prover": "node --experimental-wasm-modules build/bin/fakeProver.js"
     },
     "dependencies": {

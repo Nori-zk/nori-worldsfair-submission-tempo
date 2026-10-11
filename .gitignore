@@ -12,6 +12,8 @@ web/*/*/public
 *.tsbuildinfo
 keeper.json
 keeper-state.json
+keeper-migration-state.json
+migration-state.json
 keeper-soak-state.json
 soak-*/
 *.log

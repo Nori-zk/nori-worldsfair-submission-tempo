@@ -12,3 +12,4 @@ artifacts/build-info
 .env.nori-eth-snapshot
 !.env.nori-eth-snapshot.example
 .env.nori-eth-demo
+.env.nori-eth-migration

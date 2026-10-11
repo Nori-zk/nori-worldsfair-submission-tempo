@@ -1,6 +1,7 @@
-# Local chains for the scripts, sourced by dry-run.sh and dev-local.sh: a
-# Hardhat fork of Ethereum on 18545 and `anvil --network tempo` on 18546,
-# with the read loop's contracts deployed on them.
+# Local chains for the scripts, sourced by dry-run.sh, migrate-dry-run.sh and
+# dev-local.sh: a Hardhat fork of Ethereum on 18545 (a fresh local chain when
+# ETH_FORK_RPC is empty) and `anvil --network tempo` on 18546, with the read
+# loop's contracts deployed on them.
 #
 # The sourcing script sets ETH_FORK_RPC, TEMPO_FORK_RPC and KEEP (1 leaves the
 # chains running at exit), and may add ports to EXTRA_PORTS for cleanup to free.
@@ -80,10 +81,14 @@ check_local() {
     done
 }
 
+# Multicall3's canonical address, where the sdk batches a queue's first reads
+MULTICALL3_ADDRESS=0xcA11bde05977b3631167028862bE2a173976CA11
+
 # Starts both chains and sets ETH_START_BLOCK, the fork's block before any deploy.
 start_chains() {
     say "Starting chains (logs in $W)"
-    (cd "$REPO/ethereum" && ETH_NETWORK=hardhat exec npx hardhat node --fork "$ETH_FORK_RPC" --port 18545) >"$W/ethereum.log" 2>&1 &
+    if [ -n "$ETH_FORK_RPC" ]; then ETH_SOURCE=(--fork "$ETH_FORK_RPC"); else ETH_SOURCE=(); fi
+    (cd "$REPO/ethereum" && ETH_NETWORK=hardhat exec npx hardhat node "${ETH_SOURCE[@]}" --port 18545) >"$W/ethereum.log" 2>&1 &
     PIDS+=($!)
     # A fork keeps the local chain id, which deployNoriBridge requires
     if [ -n "$TEMPO_FORK_RPC" ]; then TEMPO_SOURCE=(--fork-url "$TEMPO_FORK_RPC" --chain-id 31337); else TEMPO_SOURCE=(); fi
@@ -94,8 +99,18 @@ start_chains() {
     # A fork's clock starts behind real time; the guard compares it with Tempo's
     cast rpc evm_setNextBlockTimestamp "$(date +%s)" --rpc-url "$ETH_URL" >/dev/null
     cast rpc evm_mine --rpc-url "$ETH_URL" >/dev/null
+    if [ -z "$ETH_FORK_RPC" ]; then
+        # A fresh chain has no Multicall3: plant the vendored one (ethereum/contracts/test)
+        cast rpc hardhat_setCode "$MULTICALL3_ADDRESS" \
+            "$(node -p "require('$REPO/ethereum/artifacts/contracts/test/Multicall3.sol/Multicall3.json').deployedBytecode")" \
+            --rpc-url "$ETH_URL" >/dev/null
+    fi
     ETH_START_BLOCK=$(cast block-number --rpc-url "$ETH_URL")
-    echo "Ethereum: fork of chain $(cast chain-id --rpc-url "$ETH_FORK_RPC") ($ETH_FORK_RPC) on $ETH_URL"
+    if [ -n "$ETH_FORK_RPC" ]; then
+        echo "Ethereum: fork of chain $(cast chain-id --rpc-url "$ETH_FORK_RPC") ($ETH_FORK_RPC) on $ETH_URL"
+    else
+        echo "Ethereum: a fresh local chain (offline), Multicall3 planted, on $ETH_URL"
+    fi
     echo "Tempo: anvil --network tempo on $TEMPO_URL, state from ${TEMPO_FORK_RPC:-nowhere (offline)}"
 }
 
