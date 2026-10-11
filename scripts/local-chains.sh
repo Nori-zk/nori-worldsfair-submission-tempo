@@ -167,8 +167,8 @@ deploy_contracts() {
 
     local adopt=()
     if [ "${MIGRATION:-0}" = 1 ]; then
-        say "Ethereum: the issuer deploys DUSD and mints 1,000,000 to test key 0, the wallet's account"
-        deploy_issuer_token "$(cast wallet address "$DEV_KEY")"
+        say "Ethereum: the issuer deploys DUSD and mints 1,000,000 to test key 2, for your wallet"
+        deploy_issuer_token "$(cast wallet address "$HOLDER_KEY")"
         adopt=(--adopt "$NORI_ETH_ISSUER_TOKEN_ADDRESS")
     fi
 

@@ -18,7 +18,7 @@
 # the Nori bridge with adoptMirror (local-chains.sh, use_bridge_with_adopt).
 #
 # Tempo transactions (the migrate app's claim) pay their fee in a USD TIP-20:
-# test key 0 holds pathUSD on the local Tempo node.
+# the test keys hold pathUSD on the local Tempo node.
 
 set -euo pipefail
 
@@ -91,7 +91,8 @@ ${bold}Running${reset}
 ${bold}Wallet${reset}
   Add the networks: Ethereum RPC $ETH_URL, chain id $ETH_CHAIN_ID;
   Tempo RPC $TEMPO_URL, chain id $TEMPO_CHAIN_ID (the migrate app claims there).
-  Import test key 0, funded on both and holding 1,000,000 DUSD: $DEV_KEY
+  Import test key 2, funded on both and holding 1,000,000 DUSD: $HOLDER_KEY
+  (not key 0: the deploys, the keeper and the snapshots sign with it, so its nonces move under the wallet)
 
 ${bold}Migration${reset}
   The issuer pauses or unpauses DUSD on Ethereum; the keeper carries it to Tempo:
