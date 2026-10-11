@@ -1,6 +1,6 @@
-# Backstop client
+# Backstop keeper
 
-Sample client and keeper CLI, in Node. The browser apps are in [web/](../web/README.md).
+Keeper CLI and its library, in Node. The browser apps are in [web/](../web/README.md).
 
 - `createSnapshotEventMachine`: a snapshot transaction's `Snapshot` event, read from its receipt through the sdk's connections.
 - `createProvenRequestMachine`: one proof request until Nori has proven its batch, with the request's witness in it; it gates on the sdk's proof request and witness machines, which its creator owns.

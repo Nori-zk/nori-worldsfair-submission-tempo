@@ -9,7 +9,7 @@ At the start of every new session, before anything else, prompt the user to have
 
 Read all of it, in full, before any work in a session, and tell the user what you have read. Grepping or skimming parts does not count. Code written before reading invents what already exists.
 
-- This repo: [AGENTS.md](../AGENTS.md), [README.md](../README.md), [docs/README.md](../docs/README.md), [docs/how-it-works.drawio.png](../docs/how-it-works.drawio.png), [ethereum/README.md](../ethereum/README.md), every contract in `ethereum/contracts/` (`NoriSnapshot.sol`, `interfaces/INoriProofRequestQueue.sol`, `demo/DemoLockbox.sol`, and the test contracts in `test/`), [tempo/README.md](../tempo/README.md), [client/README.md](../client/README.md), [web/README.md](README.md).
+- This repo: [AGENTS.md](../AGENTS.md), [README.md](../README.md), [docs/README.md](../docs/README.md), [docs/how-it-works.drawio.png](../docs/how-it-works.drawio.png), [ethereum/README.md](../ethereum/README.md), every contract in `ethereum/contracts/` (`NoriSnapshot.sol`, `interfaces/INoriProofRequestQueue.sol`, `demo/DemoLockbox.sol`, and the test contracts in `test/`), [tempo/README.md](../tempo/README.md), [keeper/README.md](../keeper/README.md), [web/README.md](README.md).
 - The sdk: read the sibling checkout `../nori-tempo-sdk` (root AGENTS.md, Quirks: the sdk from npm). Use what the sdk exports before writing anything of your own; changing it follows its AGENTS.md procedure. In `../nori-tempo-sdk`:
     - `AGENTS.md`, `README.md`, `sdk/README.md`
     - `ethereum/contracts/NoriProofRequestQueue.sol`, `ethereum/contracts/NoriTokenBridge.sol`

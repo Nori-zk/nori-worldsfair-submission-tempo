@@ -23,7 +23,7 @@ Read before writing code: code written first tends to reinvent what already exis
 | `ethereum/vectors/`               | Builds `test-vectors/nori-snapshot/` (`npm run vectors`), including the 2030 Kelp replay                                                                                                                                              |
 | `tempo/`                          | Solidity for Tempo: `NoriRead` (library), `NoriReadExample`, `Backstop` + `BackstopRules` ([diagram](docs/backstop-guard.drawio.png)); `contracts/test/` harnesses; tasks `deploy`, `deployDemo`, `deployNoriBridge` (local dry runs) |
 | `scripts/`                        | `dry-run.sh` (local loop, fake prover), `dev-local.sh` (web apps on local chains), `outage.sh` (freeze or resume a local chain), `local-chains.sh` (the chains both start), `deploy-moderato.sh` (Backstop + demo token), `soak.sh` (keeper for hours, then `report.md`) |
-| `client/`                         | Sample TS client and keeper CLI (`npm run keeper`). `fake-prover` is for local dry runs only. Tests run with `node --test` on the build, since the wasm hasher breaks jest                                                            |
+| `keeper/`                         | Backstop keeper CLI (`npm run keeper`) and its TS library. `fake-prover` is for local dry runs only. Tests run with `node --test` on the build, since the wasm hasher breaks jest                                                                                        |
 | `web/`                            | yaw + vite UIs ([README](web/README.md)): `apps/prove-balance`, `dashboards/bridge`, shared `libs/ui` (`@nori-zk/tempo-web-ui`). Build constants in `web/.env` via `web/env.ts`                                                       |
 | (no submodules)                   | The Nori SDK is the packages `@nori-zk/nori-bridge-tempo-sdk`, `@nori-zk/ethereum-tempo-bridge`, `@nori-zk/tempo-token-bridge`, `@nori-zk/tempo-zk-utils` and `@nori-zk/ethereum-tempo-proof-queue-utils-glam`                       |
 
@@ -32,7 +32,7 @@ Read before writing code: code written first tends to reinvent what already exis
 ```bash
 npm install && npm run build      # build: every workspace's build, --workspaces --if-present
 anvil --network tempo &           # the tempo/ tests' local node, on 8545
-npm test                          # ethereum (incl. vector drift check), tempo, client
+npm test                          # ethereum (incl. vector drift check), tempo, keeper
 npm run test:fork -w ethereum     # mainnet fork (network)
 npm run vectors -w ethereum       # regenerate test vectors
 npm run typecheck                 # every workspace's typecheck, --workspaces --if-present
@@ -62,7 +62,7 @@ npm run outage -- eth|tempo down|up # freeze or resume a dev:local chain
 - Snapshot indices start at 1, and time keys are never zero. The reader rejects zero keys.
 - The committed word is `root | 1<<255`. Readers reject words without the top bit.
 - `NoriSnapshot.sol`, `snapshotProof.ts` and `NoriRead.sol` must hash identically; the tests pin them together.
-- Every Solidity constant has a TS mirror in its contract's `<Contract>.const.ts` (`ethereum/contracts/`, `tempo/contracts/`, and the sdk's), exported from the package. Tasks, tests and the client import those; never copy a value.
+- Every Solidity constant has a TS mirror in its contract's `<Contract>.const.ts` (`ethereum/contracts/`, `tempo/contracts/`, and the sdk's), exported from the package. Tasks, tests and the keeper import those; never copy a value.
 - Tests and the fake prover plant committed batches into the Nori bridge's storage with `anvil_setStorageAt`, using the sdk's layout constants (`PACKED_STATE_SLOT`, `PROOF_QUEUE_BATCHES_SLOT` and their offsets).
 - A guard pins its Nori bridge, NoriSnapshot, queries and intervals at `createGuard`. Changing any of them means a new guard.
 

@@ -19,9 +19,9 @@ Addresses and numbers: [docs/README.md](docs/README.md).
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `ethereum/`     | `NoriSnapshot` contract, query list, deploy and snapshot tasks                                                                         |
 | `tempo/`        | Solidity: `NoriRead` (verify a snapshot result in one call), `NoriReadExample`, Backstop (circuit breaker) ([README](tempo/README.md)) |
-| `client/`       | Sample TS client and keeper CLI: create-guards, snapshot, checkpoint, submit, status, unlatch, run                                     |
+| `keeper/`       | Backstop keeper CLI and its TS library: create-guards, snapshot, checkpoint, submit, status, unlatch, run                              |
 | `web/`          | Browser apps: prove an Ethereum balance on Tempo, and a live dashboard of the proof queue ([README](web/README.md))                    |
-| `test-vectors/` | Test data shared by the contract and client tests                                                                                      |
+| `test-vectors/` | Test data shared by the contract and keeper tests                                                                                      |
 | `scripts/`      | `dry-run.sh` (the whole loop locally), `dev-local.sh` (the web apps on local chains), `outage.sh` (freeze or resume a local chain), `local-chains.sh` (the chains both start), `deploy-moderato.sh` (Backstop + demo token), `soak.sh` (keeper for hours, then a report) |
 | `docs/`         | [Index of all docs](docs/README.md), diagrams, deployments                                                                             |
 
@@ -31,7 +31,7 @@ Addresses and numbers: [docs/README.md](docs/README.md).
 git clone https://github.com/Nori-zk/nori-worldsfair-submission-tempo
 npm install && npm run build
 anvil --network tempo &  # the tempo/ tests' local node
-npm test                 # ethereum contracts, the tempo contracts, then the client
+npm test                 # ethereum contracts, the tempo contracts, then the keeper
 npm run lint             # every workspace
 scripts/dry-run.sh       # the whole loop on local chains, with a fake prover
 npm run dev:local        # the web apps on local chains
@@ -65,10 +65,10 @@ npm run deploy-demo -w ethereum -- 116723.52   # -> ethereum/.env.nori-eth-demo
 # Tempo: Backstop, and a demo TIP-20 with supply 116,700 (-> tempo/.env.nori-tempo-*); safe to rerun
 scripts/deploy-moderato.sh
 
-# Keeper: client/keeper.demo.json reads .env and the deploy outputs
-npm run keeper -w client -- create-guards
-npm run keeper -w client -- status   # Nori's progress through the queue, then each guard
-npm run keeper -w client -- run
+# Keeper: keeper/keeper.demo.json reads .env and the deploy outputs
+npm run keeper -w keeper -- create-guards
+npm run keeper -w keeper -- status   # Nori's progress through the queue, then each guard
+npm run keeper -w keeper -- run
 ```
 
 bridge-head proves `NORI_ETH_PROOF_QUEUE_ADDRESS` and updates `NORI_TEMPO_TOKEN_BRIDGE_ADDRESS`.

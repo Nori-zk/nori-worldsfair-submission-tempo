@@ -73,7 +73,7 @@ check_local() {
     for tool in anvil cast npx lsof; do
         command -v "$tool" >/dev/null || { echo "Missing: $tool"; exit 1; }
     done
-    [ -d "$REPO/client/build" ] || { echo "Run 'npm install && npm run build' first"; exit 1; }
+    [ -d "$REPO/keeper/build" ] || { echo "Run 'npm install && npm run build' first"; exit 1; }
     for port in 18545 18546 "${EXTRA_PORTS[@]:-}"; do
         [ -n "$port" ] || continue
         if lsof -i ":$port" >/dev/null 2>&1; then echo "Port $port is busy"; exit 1; fi
@@ -101,8 +101,8 @@ start_chains() {
 
 # Builds and deploys every contract, and exports their addresses.
 deploy_contracts() {
-    say "Building the contracts and the client"
-    (cd "$REPO" && npm run -s build -w ethereum -w tempo -w client >/dev/null)
+    say "Building the contracts and the keeper"
+    (cd "$REPO" && npm run -s build -w ethereum -w tempo -w keeper >/dev/null)
 
     say "Ethereum: deploying the proof queue, NoriSnapshot, a lockbox holding 116,723.52 and a token bridge on that queue"
     (cd "$REPO/ethereum" && quiet npx hardhat --network localfork deploy | grep -oE "(NoriProofRequestQueue|NoriSnapshot) deployed to: 0x[0-9a-fA-F]+")
@@ -148,6 +148,6 @@ EOF
     echo "Keeper config: $W/keeper.json"
 }
 
-keeper() { (cd "$REPO/client" && quiet npm run -s keeper -- "$1" "$W/keeper.json"); }
-prove() { (cd "$REPO/client" && quiet npm run -s fake-prover -- "$W/keeper.json"); }
+keeper() { (cd "$REPO/keeper" && quiet npm run -s keeper -- "$1" "$W/keeper.json"); }
+prove() { (cd "$REPO/keeper" && quiet npm run -s fake-prover -- "$W/keeper.json"); }
 demo_set() { (cd "$REPO/ethereum" && quiet npx hardhat --network localfork demoSet "$@" | grep -oE "DemoLockbox: .*\)"); }

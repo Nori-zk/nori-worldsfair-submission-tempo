@@ -12,9 +12,9 @@
 | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | [ethereum/README.md](../ethereum/README.md)                                     | `NoriSnapshot`: the proven leaf, what a consumer must check, commands, gas                              |
 | [tempo/README.md](../tempo/README.md)                                           | `NoriRead` in your contract, and Backstop: circuit breakers; [guard diagram](backstop-guard.drawio.png) |
-| [client/README.md](../client/README.md)                                         | Sample client, keeper CLI and the local dry run                                                         |
+| [keeper/README.md](../keeper/README.md)                                         | Keeper CLI, its library and the local dry run                                                           |
 | [web/README.md](../web/README.md)                                               | Browser apps: prove a balance, bridge dashboard                                                         |
-| [test-vectors/nori-snapshot/README.md](../test-vectors/nori-snapshot/README.md) | Test data shared by the contract and client tests                                                       |
+| [test-vectors/nori-snapshot/README.md](../test-vectors/nori-snapshot/README.md) | Test data shared by the contract and keeper tests                                                       |
 
 Upstream: the Nori SDK, the sibling checkout `../nori-tempo-sdk` (its `README.md`,
 `sdk/README.md` and `DEPLOYMENT.md`), and the prover, nori-bridge-head on branch
@@ -53,4 +53,4 @@ Measured on local chains (`scripts/dry-run.sh` and the `tempo/` tests):
   38,322; a whole `NoriReadExample` read at most 49,332. A 4-query snapshot costs 753,817
   gas on Sepolia (see `ethereum/README.md`).
 
-`npm run keeper -w client -- status` shows how far Nori has proven the queue, and each guard.
+`npm run keeper -w keeper -- status` shows how far Nori has proven the queue, and each guard.

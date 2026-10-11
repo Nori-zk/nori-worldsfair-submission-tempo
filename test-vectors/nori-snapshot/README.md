@@ -1,6 +1,6 @@
 # NoriSnapshot read vectors
 
-Generated from the contracts by `npm run vectors -w ethereum`; read by the `NoriRead`, Backstop and `NoriReadExample` tests in `tempo/` and the client's tests.
+Generated from the contracts by `npm run vectors -w ethereum`; read by the `NoriRead`, Backstop and `NoriReadExample` tests in `tempo/` and the keeper's tests.
 
 - `snapshot-read-vectors.json`: reproducible local batch. It holds a non-snapshot request, two snapshots, and a forgery attempt that must fail. `npm test` checks the file is current.
 - `snapshot-read-mainnet-vectors.json`: real mainnet contracts on a local fork (`npm run vectors:mainnet`). It is not a real deployment or proof.

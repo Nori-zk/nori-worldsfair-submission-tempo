@@ -19,7 +19,7 @@ NoriRead.ProvenResult memory proven =
 ```
 
 The witness is built off-chain from the `Snapshot` event and the queue
-(`fetchProvenSnapshot` in [`client/`](../client)).
+(`fetchProvenSnapshot` in [`keeper/`](../keeper)).
 
 Your contract must:
 
