@@ -20,6 +20,11 @@ npm run dev -w web/dashboards/bridge    # http://localhost:7400
 `NORI_TEMPO_TOKEN_BRIDGE_ADDRESS`, the Nori bridge on Moderato, in `web/.env`. After a redeploy,
 update the addresses in `web/.env` (committed: public values only; everything in it reaches the browser).
 
+Every page links to the others along its top. When hosting, set each one's hosted address in the
+host's build environment: `NORI_WEB_PROVE_BALANCE_URL` and `NORI_WEB_DASHBOARD_URL` (`web/.env`
+has the dev servers'), and `NORI_WEB_SOLANA_DASHBOARD_URL`, the Solana submission's bridge
+dashboard, linked only when set.
+
 ## Prove balance
 
 Connect an Ethereum wallet. The app asks you to install MetaMask if you have none, to pick

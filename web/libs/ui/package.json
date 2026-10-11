@@ -11,6 +11,7 @@
     "scripts": {
         "prepare": "ts-patch install",
         "typecheck": "tsc --noEmit",
+        "test": "node --import ../../test/resolve-ts.mjs --test 'src/**/*.test.ts'",
         "lint": "eslint src/",
         "lint:fix": "eslint src/ --fix",
         "format": "prettier --check src/",

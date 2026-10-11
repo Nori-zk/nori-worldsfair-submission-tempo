@@ -31,6 +31,13 @@ export interface WebEnv {
         /** The bridge's websocket, for the live processing stages. */
         wssUrl: string;
     };
+    /** Each app's and dashboard's address, for the links along the top of every page. */
+    urls: {
+        proveBalance: string;
+        dashboard: string;
+        /** The Solana submission's bridge dashboard, or `''` to leave its link out. */
+        solanaDashboard: string;
+    };
 }
 
 /** Thrown when a web/ build constant is missing or malformed. */
@@ -100,6 +107,14 @@ export function loadWebEnv(): WebEnv {
         },
         bridge: {
             wssUrl: readUrl('NORI_WEB_BRIDGE_WSS_URL', WS, 'a ws:// or wss:// URL'),
+        },
+        urls: {
+            proveBalance: readUrl('NORI_WEB_PROVE_BALANCE_URL', HTTP, 'an http:// or https:// URL'),
+            dashboard: readUrl('NORI_WEB_DASHBOARD_URL', HTTP, 'an http:// or https:// URL'),
+            solanaDashboard:
+                process.env.NORI_WEB_SOLANA_DASHBOARD_URL || file.NORI_WEB_SOLANA_DASHBOARD_URL
+                    ? readUrl('NORI_WEB_SOLANA_DASHBOARD_URL', HTTP, 'an http:// or https:// URL')
+                    : '',
         },
     };
 }
