@@ -4,6 +4,7 @@ import { navLinks } from './nav.js';
 
 const urls = {
     proveBalance: 'http://localhost:5180',
+    migrate: 'http://localhost:5181',
     dashboard: 'http://localhost:7400',
     solanaDashboard: '',
 };
@@ -11,6 +12,7 @@ const urls = {
 void test('the nav links each app with an address, the page its heading names marked current', () => {
     assert.deepEqual(navLinks(urls, 'Prove balance'), [
         { label: 'Prove balance', url: 'http://localhost:5180', current: 'page' },
+        { label: 'Migrate', url: 'http://localhost:5181', current: null },
         { label: 'Bridge dashboard', url: 'http://localhost:7400', current: null },
     ]);
 });
