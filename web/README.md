@@ -19,7 +19,10 @@ npm run dev -w web/dashboards/bridge    # http://localhost:7400
 ```
 
 `build`, `build:ssg` (static pages) and `preview` work the same way. They need
-`NORI_TEMPO_TOKEN_BRIDGE_ADDRESS`, the Nori bridge on Moderato, in `web/.env`. After a redeploy,
+`NORI_TEMPO_TOKEN_BRIDGE_ADDRESS`, the Nori bridge on Moderato, in `web/.env`. The migrate app
+also reads `NORI_ETH_TOKEN_BRIDGE_ADDRESS` (the `NoriTokenBridge` it locks in) and
+`NORI_WEB_MIGRATION_TOKEN` (the ERC-20 it migrates); while either is empty it builds a page
+saying it is not configured, so the root `npm run build` needs neither. After a redeploy,
 update the addresses in `web/.env` (committed: public values only; everything in it reaches the browser).
 
 Every page links to the others along its top. When hosting, set each one's hosted address in the
@@ -48,7 +51,7 @@ Tempo. Any Tempo contract can verify it with [`NoriRead`](../tempo/README.md).
 Move an Ethereum ERC-20 (DUSD in the demo, `NORI_WEB_MIGRATION_TOKEN`) to its issuer's
 TIP-20 on Tempo, the bridge adapter path of Tempo's migration guide
 ([keeper/README.md](../keeper/README.md), "Migration CLI", does the same from Node).
-The migrate app's build also needs `NORI_ETH_TOKEN_BRIDGE_ADDRESS`.
+Its page needs `NORI_ETH_TOKEN_BRIDGE_ADDRESS` too, and says it is not configured without both.
 
 1. Connect an Ethereum wallet. Enter an amount (at most 6 decimals: a TIP-20 has 6) and
    the Tempo recipient, your own address by default: only it can claim. The app quotes

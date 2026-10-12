@@ -16,7 +16,7 @@ export interface WebEnv {
         proofQueueDeployBlock: number;
         /** The `NoriSnapshot` address. */
         snapshotAddress: string;
-        /** The `NoriTokenBridge` holders lock ERC-20s in, or `''` where no app needs it (the migrate app does). */
+        /** The `NoriTokenBridge` holders lock ERC-20s in, or `''` while none is deployed (the migrate app then says it is not configured). */
         tokenBridgeAddress: string;
     };
     tempo: {
@@ -34,7 +34,7 @@ export interface WebEnv {
         wssUrl: string;
     };
     migration: {
-        /** The Ethereum ERC-20 the migrate app moves to its TIP-20 on Tempo, or `''` where no app needs it. */
+        /** The Ethereum ERC-20 the migrate app moves to its TIP-20 on Tempo, or `''` (the migrate app then says it is not configured). */
         token: string;
     };
     /** Each app's and dashboard's address, for the links along the top of every page. */

@@ -8,6 +8,7 @@ import {
 } from '@nori-zk/tempo-web-ui';
 import { MigrateService } from './app-root/services/migrate.service.js';
 import { MigrationStatusService } from './app-root/services/migration-status.service.js';
+import { MIGRATE_ADDRESSES } from './app-root/utils/addresses.js';
 import './app-root/components/migrate-form.component.js';
 import './app-root/components/migration-status.component.js';
 
@@ -37,6 +38,16 @@ const connectionsOptions: ConnectionsOptions = {
     },
 };
 
+/**
+ * The page's content: the migration, or, in a build without the token
+ * bridge or the token it migrates (web/.env), a line saying so, and nothing
+ * that reads or signs.
+ */
+const content =
+    MIGRATE_ADDRESSES.token === '' || MIGRATE_ADDRESSES.tokenBridge === ''
+        ? '<p>Not configured yet: this build has no token bridge or token to migrate.</p>'
+        : '<wallet-pair></wallet-pair><migrate-form></migrate-form><migration-status></migration-status>';
+
 @Component({
     selector: 'app-root',
     providers: [
@@ -52,9 +63,7 @@ const connectionsOptions: ConnectionsOptions = {
             heading="Migrate"
             lede="Move an Ethereum ERC-20 to its issuer's TIP-20 on Tempo: lock it on Ethereum, claim it on Tempo once Nori has proven the lock."
         >
-            <wallet-pair></wallet-pair>
-            <migrate-form></migrate-form>
-            <migration-status></migration-status>
+            ${content}
         </nori-page>
     `,
 })
