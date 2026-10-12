@@ -120,18 +120,19 @@ start_chains() {
 # The Nori bridge with adoptMirror (@nori-zk/tempo-token-bridge 0.0.3): the
 # installed package once it has it, otherwise the artifact committed in a
 # nori-tempo-sdk checkout next to this repo (or at NORI_TEMPO_SDK), which
-# deployNoriBridge deploys instead (NORI_TEMPO_BRIDGE_ARTIFACT).
+# deployNoriBridge deploys instead (NORI_TEMPO_BRIDGE_ARTIFACT). Returns 1,
+# saying what is missing, when neither has it.
 use_bridge_with_adopt() {
     if (cd "$REPO/tempo" && node -e "import('@nori-zk/tempo-token-bridge').then((m) => process.exit(m.NoriTempoTokenBridge__factory.createInterface().getFunction('adoptMirror') ? 0 : 1))" 2>/dev/null); then
         return
     fi
     local sdk=${NORI_TEMPO_SDK:-$REPO/../nori-tempo-sdk}
-    export NORI_TEMPO_BRIDGE_ARTIFACT=$sdk/tempo/artifacts/contracts/NoriTempoTokenBridge.sol/NoriTempoTokenBridge.json
-    if ! grep -q adoptMirror "$NORI_TEMPO_BRIDGE_ARTIFACT" 2>/dev/null; then
-        echo "The installed @nori-zk/tempo-token-bridge has no adoptMirror (0.0.3), and $NORI_TEMPO_BRIDGE_ARTIFACT"
-        echo "is missing or older. Check out nori-tempo-sdk's issuer-owned mirrors there, or set NORI_TEMPO_SDK."
-        exit 1
+    local artifact=$sdk/tempo/artifacts/contracts/NoriTempoTokenBridge.sol/NoriTempoTokenBridge.json
+    if ! grep -q adoptMirror "$artifact" 2>/dev/null; then
+        echo "No Nori bridge with adoptMirror: the installed @nori-zk/tempo-token-bridge is older than 0.0.3 and $artifact is missing or older (check out nori-tempo-sdk's FEAT/tempo-issuer-owned-mirrors there, or set NORI_TEMPO_SDK)"
+        return 1
     fi
+    export NORI_TEMPO_BRIDGE_ARTIFACT=$artifact
 }
 
 # Deploys DUSD on Ethereum as the issuer, minting 1,000,000 to $1, and

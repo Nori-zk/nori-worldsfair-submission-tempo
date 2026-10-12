@@ -14,8 +14,9 @@
 #   --prove-every SECS   seconds between fake-prover runs (default: 15)
 #
 # Ctrl-C stops everything. scripts/outage.sh freezes and resumes a chain while
-# it runs. Uses ports 18545, 18546, 5180, 5181 and 7400. The migrate app needs
-# the Nori bridge with adoptMirror (local-chains.sh, use_bridge_with_adopt).
+# it runs. Uses ports 18545, 18546, 5180, 5181 and 7400. DUSD and the migrate
+# app need the Nori bridge with adoptMirror (local-chains.sh,
+# use_bridge_with_adopt); without it prove-balance and the dashboard run alone.
 #
 # Tempo transactions (the migrate app's claim) pay their fee in a USD TIP-20:
 # the test keys hold pathUSD on the local Tempo node.
@@ -39,10 +40,13 @@ while [ $# -gt 0 ]; do
 done
 
 . "$(dirname "$0")/local-chains.sh"
-EXTRA_PORTS=(5180 5181 7400)
-MIGRATION=1
+MIGRATION=0
+EXTRA_PORTS=(5180 7400)
+if use_bridge_with_adopt; then
+    MIGRATION=1
+    EXTRA_PORTS+=(5181)
+fi
 
-use_bridge_with_adopt
 check_local
 start_chains
 deploy_contracts
@@ -58,17 +62,21 @@ export ETH_CHAIN_ID=$(cast chain-id --rpc-url "$ETH_URL")
 export TEMPO_CHAIN_ID=$(cast chain-id --rpc-url "$TEMPO_URL")
 export TEMPO_WSS_NETWORK_URL=ws://127.0.0.1:18546
 export NORI_WEB_PROOF_QUEUE_DEPLOY_BLOCK=$ETH_START_BLOCK
-export NORI_WEB_MIGRATION_TOKEN=$NORI_ETH_ISSUER_TOKEN_ADDRESS
 
 say "Starting the apps (logs in $W)"
 (cd "$REPO" && exec npm run dev -w web/apps/prove-balance) >"$W/prove-balance.log" 2>&1 &
 PIDS+=($!)
-(cd "$REPO" && exec npm run dev -w web/apps/migrate) >"$W/migrate.log" 2>&1 &
-PIDS+=($!)
+MIGRATE_AT="off (no Nori bridge with adoptMirror, see the start)"
+if [ "$MIGRATION" = 1 ]; then
+    export NORI_WEB_MIGRATION_TOKEN=$NORI_ETH_ISSUER_TOKEN_ADDRESS
+    (cd "$REPO" && exec npm run dev -w web/apps/migrate) >"$W/migrate.log" 2>&1 &
+    PIDS+=($!)
+    MIGRATE_AT=http://localhost:5181
+fi
 (cd "$REPO" && exec npm run dev -w web/dashboards/bridge) >"$W/bridge-dashboard.log" 2>&1 &
 PIDS+=($!)
 wait_for "prove-balance" "curl -sf -o /dev/null http://localhost:5180"
-wait_for "migrate" "curl -sf -o /dev/null http://localhost:5181"
+[ "$MIGRATION" = 0 ] || wait_for "migrate" "curl -sf -o /dev/null http://localhost:5181"
 wait_for "bridge dashboard" "curl -sf -o /dev/null http://localhost:7400"
 
 # Each round the keeper snapshots the demo lockbox and syncs any pause that
@@ -82,7 +90,7 @@ cat <<EOF
 
 ${bold}Running${reset}
   prove-balance      http://localhost:5180
-  migrate            http://localhost:5181
+  migrate            $MIGRATE_AT
   bridge dashboard   http://localhost:7400
   Ethereum           $ETH_URL (chain $ETH_CHAIN_ID)
   Tempo              $TEMPO_URL (chain $TEMPO_CHAIN_ID)
@@ -91,12 +99,19 @@ ${bold}Running${reset}
 ${bold}Wallet${reset}
   Add the networks: Ethereum RPC $ETH_URL, chain id $ETH_CHAIN_ID;
   Tempo RPC $TEMPO_URL, chain id $TEMPO_CHAIN_ID (the migrate app claims there).
-  Import test key 2, funded on both and holding 1,000,000 DUSD: $HOLDER_KEY
+  Import test key 2, funded on both: $HOLDER_KEY
   (not key 0: the deploys, the keeper and the snapshots sign with it, so its nonces move under the wallet)
+EOF
+if [ "$MIGRATION" = 1 ]; then
+    cat <<EOF
 
 ${bold}Migration${reset}
+  Test key 2 holds 1,000,000 DUSD $NORI_ETH_ISSUER_TOKEN_ADDRESS; its TIP-20 on Tempo is $NORI_TEMPO_MIRROR_ADDRESS.
   The issuer pauses or unpauses DUSD on Ethereum; the keeper carries it to Tempo:
   (cd ethereum && ETH_NETWORK=localfork ETH_RPC_URL=$ETH_URL ETH_PRIVATE_KEY=$ISSUER_KEY NORI_ETH_ISSUER_TOKEN_ADDRESS=$NORI_ETH_ISSUER_TOKEN_ADDRESS npx hardhat --network localfork issuerPause [--unpause])
+EOF
+fi
+cat <<EOF
 
 ${bold}Outages${reset} (the chain keeps its state while frozen)
   npm run outage -- eth down     npm run outage -- eth up
@@ -108,8 +123,6 @@ ${bold}Contracts${reset}
   NoriSnapshot            $NORI_ETH_SNAPSHOT_ADDRESS
   NoriTokenBridge         $NORI_ETH_TOKEN_BRIDGE_ADDRESS
   NoriTempoTokenBridge    $NORI_TEMPO_TOKEN_BRIDGE_ADDRESS
-  DUSD (Ethereum)         $NORI_ETH_ISSUER_TOKEN_ADDRESS
-  DUSD's TIP-20 (Tempo)   $NORI_TEMPO_MIRROR_ADDRESS
   Keeper config           $W/keeper.json
 
 Ctrl-C stops everything.

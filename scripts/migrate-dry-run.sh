@@ -55,7 +55,7 @@ step() {
     if [ "$YES" = 0 ]; then read -r -p "   press Enter to run " _; fi
 }
 
-use_bridge_with_adopt
+use_bridge_with_adopt || exit 1
 check_local
 start_chains
 HOLDER=$(cast wallet address "$HOLDER_KEY")
