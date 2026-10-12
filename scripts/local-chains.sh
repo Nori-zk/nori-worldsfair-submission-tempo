@@ -4,7 +4,8 @@
 # loop's contracts deployed on them.
 #
 # The sourcing script sets ETH_FORK_RPC, TEMPO_FORK_RPC and KEEP (1 leaves the
-# chains running at exit), and may add ports to EXTRA_PORTS for cleanup to free.
+# chains running at exit), and may add ports to EXTRA_PORTS for check_local to
+# require free. Cleanup stops only the processes the script started (PIDS).
 # MIGRATION=1 also deploys DUSD, the ERC-20 the migrate app moves to Tempo,
 # and has Nori adopt the issuer's TIP-20 of it (use_bridge_with_adopt first).
 #
@@ -44,26 +45,16 @@ quiet() { "$@" 2>&1 | grep -vE "ExperimentalWarning|trace-warnings|^\s*$" || tru
 
 PIDS=()
 EXTRA_PORTS=()
+# Stops a started process and everything under it (npx runs the Hardhat node,
+# npm the dev servers, levels below the pid), resuming each first in case
+# outage.sh froze it. Never by port: that would stop whatever else holds it.
+kill_tree() { local child; for child in $(pgrep -P "$1"); do kill_tree "$child"; done; kill -CONT "$1" 2>/dev/null || true; kill "$1" 2>/dev/null || true; }
 cleanup() {
     if [ "$KEEP" = 1 ]; then
         echo; echo "Chains left running (pids ${PIDS[*]:-}); work dir $W"
         return
     fi
-    # npx runs the Hardhat node a level below its own pid, so the nodes are
-    # also stopped by the ports they hold. A chain frozen by outage.sh is
-    # resumed first, so it can exit.
-    for pid in "${PIDS[@]:-}"; do
-        [ -n "$pid" ] || continue
-        pkill -CONT -P "$pid" 2>/dev/null || true
-        pkill -P "$pid" 2>/dev/null || true
-        kill "$pid" 2>/dev/null || true
-    done
-    local ports=(-i :18545 -i :18546)
-    for port in "${EXTRA_PORTS[@]:-}"; do [ -n "$port" ] && ports+=(-i ":$port"); done
-    for pid in $(lsof -t "${ports[@]}" 2>/dev/null); do
-        kill -CONT "$pid" 2>/dev/null || true
-        kill "$pid" 2>/dev/null || true
-    done
+    for pid in "${PIDS[@]:-}"; do [ -n "$pid" ] && kill_tree "$pid"; done
     rm -rf "$W"
 }
 trap cleanup EXIT
