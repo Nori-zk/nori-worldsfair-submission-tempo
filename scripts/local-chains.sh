@@ -104,8 +104,12 @@ start_chains() {
     PIDS+=($!)
     wait_for "Ethereum fork" "cast chain-id --rpc-url $ETH_URL"
     wait_for "Tempo node" "cast chain-id --rpc-url $TEMPO_URL"
-    # A fork's clock starts behind real time; the guard compares it with Tempo's
-    cast rpc evm_setNextBlockTimestamp "$(date +%s)" --rpc-url "$ETH_URL" >/dev/null
+    # A fork's clock starts behind real time; the guard compares it with Tempo's.
+    # Strictly after the latest block: a fresh chain's genesis can hold this second.
+    local now latest
+    now=$(date +%s)
+    latest=$(cast block latest --field timestamp --rpc-url "$ETH_URL")
+    cast rpc evm_setNextBlockTimestamp "$((now > latest ? now : latest + 1))" --rpc-url "$ETH_URL" >/dev/null
     cast rpc evm_mine --rpc-url "$ETH_URL" >/dev/null
     if [ -z "$ETH_FORK_RPC" ]; then
         # A fresh chain has no Multicall3: plant the vendored one (ethereum/contracts/test)
