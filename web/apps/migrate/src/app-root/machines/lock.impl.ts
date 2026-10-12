@@ -1,6 +1,5 @@
 import {
     BehaviorSubject,
-    debounceTime,
     distinctUntilChanged,
     filter,
     map,
@@ -10,6 +9,7 @@ import {
     Subject,
     switchMap,
     take,
+    timer,
     withLatestFrom,
 } from 'rxjs';
 import { Interface } from 'ethers';
@@ -30,7 +30,10 @@ import { type LockRequest, type Quote } from './quote.js';
 import { isComplete, lockBlocker, type QuoteAddresses, quote$ } from './quote.impl.js';
 import { sendOnChain } from './wallet-send.js';
 
-/** How long the form waits after the last edit before reading. */
+/**
+ * How long a read waits before it starts, so typing reads once: each edit
+ * re-enters `loading` at once (the lock disabled) and restarts the wait.
+ */
 const EDIT_SETTLE_MS = 400;
 
 /** The data of the flow's nodes. */
@@ -201,16 +204,17 @@ export function createLockMachine(
     const flow = startReadThroughConnectionsMachine(LockGraph, {
         connections,
         read: (clients, previous) =>
-            clients
-                .ethereum((provider) => quote$(provider, addresses, previous))
-                .pipe(
-                    map((quote) => ({
-                        amount: previous.amount,
-                        recipient: previous.recipient,
-                        holder: previous.holder,
-                        quote,
-                    })),
+            timer(EDIT_SETTLE_MS).pipe(
+                switchMap(() =>
+                    clients.ethereum((provider) => quote$(provider, addresses, previous)),
                 ),
+                map((quote) => ({
+                    amount: previous.amount,
+                    recipient: previous.recipient,
+                    holder: previous.holder,
+                    quote,
+                })),
+            ),
         refreshOn: () => changesOf$(newBlocks),
         needs: ['ethereum'],
         owns: [newBlocks],
@@ -267,7 +271,7 @@ export function createLockMachine(
                     next: (request: LockRequest): DataAt<'editing'> => request,
                 },
                 editComplete: {
-                    $: () => edit$.pipe(debounceTime(EDIT_SETTLE_MS), filter(isComplete)),
+                    $: () => edit$.pipe(filter(isComplete)),
                     next: toLoading,
                 },
                 approve: {

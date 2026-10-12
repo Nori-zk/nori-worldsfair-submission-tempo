@@ -1,6 +1,5 @@
 import {
     BehaviorSubject,
-    debounceTime,
     distinctUntilChanged,
     filter,
     map,
@@ -10,6 +9,7 @@ import {
     Subject,
     switchMap,
     take,
+    timer,
     withLatestFrom,
 } from 'rxjs';
 import { isAddress } from 'ethers';
@@ -30,7 +30,10 @@ import { ProveBalanceGraph, type ProveBalanceState } from './prove-balance.js';
 
 export type { BalanceRequest } from './preview.impl.js';
 
-/** How long the form waits after the last edit before reading. */
+/**
+ * How long a read waits before it starts, so typing reads once: each edit
+ * re-enters `loading` at once (the proof disabled) and restarts the wait.
+ */
 const EDIT_SETTLE_MS = 400;
 
 /** The data of the flow's nodes. */
@@ -145,9 +148,10 @@ export function createProveBalanceMachine(
     const flow = startReadThroughConnectionsMachine(ProveBalanceGraph, {
         connections,
         read: (clients, previous) =>
-            clients
-                .transport((provider) => preview$(provider, snapshotAddress, previous))
-                .pipe(map((preview) => ({ asset: previous.asset, holder: previous.holder, preview }))),
+            timer(EDIT_SETTLE_MS).pipe(
+                switchMap(() => clients.transport((provider) => preview$(provider, snapshotAddress, previous))),
+                map((preview) => ({ asset: previous.asset, holder: previous.holder, preview })),
+            ),
         refreshOn: () => changesOf$(newBlocks),
         needs: ['ethereum.wallet'],
         owns: [newBlocks],
@@ -189,7 +193,7 @@ export function createProveBalanceMachine(
                     next: (request: BalanceRequest): DataAt<'editing'> => request,
                 },
                 editComplete: {
-                    $: () => edit$.pipe(debounceTime(EDIT_SETTLE_MS), filter(isComplete)),
+                    $: () => edit$.pipe(filter(isComplete)),
                     next: (request: BalanceRequest): DataAt<'loading'> => ({
                         ...request,
                         preview: undefined,
