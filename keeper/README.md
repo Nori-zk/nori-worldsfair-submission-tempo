@@ -24,7 +24,7 @@ the Tempo account pays its fees in its fee token. Another config: pass its path 
 ## Migration CLI
 
 Moves an Ethereum ERC-20 to its TIP-20 on Tempo through nori-tempo-sdk's token bridge
-([docs/tempo-migration.md](../docs/tempo-migration.md)): the holder locks it on Ethereum
+([docs/README.md, "Token migration"](../docs/README.md#token-migration)): the holder locks it on Ethereum
 for a Tempo recipient, Nori proves the lock, and the recipient claims it on Tempo.
 
 ```sh

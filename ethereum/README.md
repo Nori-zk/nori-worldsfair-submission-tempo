@@ -45,7 +45,7 @@ Config: the repo's `.env` (`../.env.example`). `deploy` writes `.env.nori-eth-sn
 ## Migration demo: DUSD
 
 `DemoIssuerToken` is the ERC-20 an issuer migrates to Tempo in the demo
-([docs/tempo-migration.md](../docs/tempo-migration.md)): OpenZeppelin `ERC20`,
+([docs/README.md, "Token migration"](../docs/README.md#token-migration)): OpenZeppelin `ERC20`,
 `AccessControl`, `Pausable` and `Burnable`, 18 decimals, as Tempo's migration guide
 starts from. Holders lock it in nori-tempo-sdk's `NoriTokenBridge`; its `paused()` is
 what reaches its TIP-20 on Tempo.

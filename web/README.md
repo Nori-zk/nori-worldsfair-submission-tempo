@@ -1,13 +1,16 @@
 # web: browser apps
 
-Three apps on Sepolia + Tempo Moderato, built with [yaw](https://yaw-rx.github.io/) and
-[ystate](https://ystate.github.io/) on the Nori SDK. Each app's flow is a ystate graph,
+Three apps: prove-balance, migrate and the bridge dashboard, built with
+[yaw](https://yaw-rx.github.io/) and [ystate](https://ystate.github.io/) on the Nori SDK.
+Nothing is deployed on Tempo Moderato, so they run on local chains only
+(`npm run dev:local`, root README); `web/.env` holds the Sepolia and Moderato constants a
+deployment would use. Each app's flow is a ystate graph,
 drawn next to it (`ProveBalanceGraph.svg`, `LockGraph.svg` and `ClaimGraph.svg`, `BridgeBatchesGraph.svg`).
 
 | Package              | What                                                                                                                                                        |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/prove-balance` | Prove on Tempo what an Ethereum address holds: one `NoriSnapshot` transaction from your wallet, followed until a batch on Tempo covers it                   |
-| `apps/migrate`       | Migrate an Ethereum ERC-20 to its issuer's TIP-20 on Tempo: lock it on Ethereum from your wallet, follow the proof, claim it on Tempo                        |
+| `apps/migrate`       | Migrate an Ethereum ERC-20 to its issuer's TIP-20 on Tempo: lock it on Ethereum from your wallet, follow the proof, claim it on Tempo                       |
 | `dashboards/bridge`  | The whole proof queue: every batch Nori has settled on Tempo, the requests still waiting, and the stage Nori's prover is in                                 |
 | `libs/ui`            | Shared: wallet and connection buttons, the connection status bar, following a proof request, Nori's page layout and look                                    |
 | `.env`, `env.ts`     | Public build constants: Ethereum chain id and RPC, proof queue and its deploy block, `NoriSnapshot`, Tempo chain id and RPCs, Nori bridge, Nori's websocket |
@@ -19,7 +22,8 @@ npm run dev -w web/dashboards/bridge    # http://localhost:7400
 ```
 
 `build`, `build:ssg` (static pages) and `preview` work the same way. They need
-`NORI_TEMPO_TOKEN_BRIDGE_ADDRESS`, the Nori bridge on Moderato, in `web/.env`. The migrate app
+`NORI_TEMPO_TOKEN_BRIDGE_ADDRESS`, the Nori bridge on Moderato, in `web/.env` or the shell;
+none is deployed, so any address builds (root README, "Run"). The migrate app
 also reads `NORI_ETH_TOKEN_BRIDGE_ADDRESS` (the `NoriTokenBridge` it locks in) and
 `NORI_WEB_MIGRATION_TOKEN` (the ERC-20 it migrates); while either is empty it builds a page
 saying it is not configured, so the root `npm run build` needs neither. After a redeploy,
