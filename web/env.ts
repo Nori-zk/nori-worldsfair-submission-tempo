@@ -40,6 +40,7 @@ export interface WebEnv {
     /** Each app's and dashboard's address, for the links along the top of every page. */
     urls: {
         proveBalance: string;
+        /** The migrate app, or `''` to leave its link out. */
         migrate: string;
         dashboard: string;
         /** The Solana submission's bridge dashboard, or `''` to leave its link out. */
@@ -123,7 +124,11 @@ export function loadWebEnv(): WebEnv {
         },
         urls: {
             proveBalance: readUrl('NORI_WEB_PROVE_BALANCE_URL', HTTP, 'an http:// or https:// URL'),
-            migrate: readUrl('NORI_WEB_MIGRATE_URL', HTTP, 'an http:// or https:// URL'),
+            // Optional; empty in the shell wins over web/.env's dev server, so a host can leave the link out
+            migrate:
+                (process.env.NORI_WEB_MIGRATE_URL ?? file.NORI_WEB_MIGRATE_URL)
+                    ? readUrl('NORI_WEB_MIGRATE_URL', HTTP, 'an http:// or https:// URL')
+                    : '',
             dashboard: readUrl('NORI_WEB_DASHBOARD_URL', HTTP, 'an http:// or https:// URL'),
             solanaDashboard:
                 process.env.NORI_WEB_SOLANA_DASHBOARD_URL || file.NORI_WEB_SOLANA_DASHBOARD_URL

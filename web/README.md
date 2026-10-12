@@ -24,8 +24,8 @@ update the addresses in `web/.env` (committed: public values only; everything in
 
 Every page links to the others along its top. When hosting, set each one's hosted address in the
 host's build environment: `NORI_WEB_PROVE_BALANCE_URL`, `NORI_WEB_MIGRATE_URL` and `NORI_WEB_DASHBOARD_URL` (`web/.env`
-has the dev servers'), and `NORI_WEB_SOLANA_DASHBOARD_URL`, the Solana submission's bridge
-dashboard, linked only when set.
+has the dev servers'; an empty `NORI_WEB_MIGRATE_URL` leaves the Migrate link out), and
+`NORI_WEB_SOLANA_DASHBOARD_URL`, the Solana submission's bridge dashboard, linked only when set.
 
 ## Prove balance
 

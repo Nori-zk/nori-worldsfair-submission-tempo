@@ -64,15 +64,17 @@ export TEMPO_WSS_NETWORK_URL=ws://127.0.0.1:18546
 export NORI_WEB_PROOF_QUEUE_DEPLOY_BLOCK=$ETH_START_BLOCK
 
 say "Starting the apps (logs in $W)"
-(cd "$REPO" && exec npm run dev -w web/apps/prove-balance) >"$W/prove-balance.log" 2>&1 &
-PIDS+=($!)
 MIGRATE_AT="off (no Nori bridge with adoptMirror, see the start)"
 if [ "$MIGRATION" = 1 ]; then
     export NORI_WEB_MIGRATION_TOKEN=$NORI_ETH_ISSUER_TOKEN_ADDRESS
     (cd "$REPO" && exec npm run dev -w web/apps/migrate) >"$W/migrate.log" 2>&1 &
     PIDS+=($!)
     MIGRATE_AT=http://localhost:5181
+else
+    export NORI_WEB_MIGRATE_URL=  # the nav leaves out the link to the app that is not running
 fi
+(cd "$REPO" && exec npm run dev -w web/apps/prove-balance) >"$W/prove-balance.log" 2>&1 &
+PIDS+=($!)
 (cd "$REPO" && exec npm run dev -w web/dashboards/bridge) >"$W/bridge-dashboard.log" 2>&1 &
 PIDS+=($!)
 wait_for "prove-balance" "curl -sf -o /dev/null http://localhost:5180"
