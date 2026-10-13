@@ -47,19 +47,22 @@
           <mxGeometry x="330" y="50" width="270" height="370" as="geometry" />
         </mxCell>
         <mxCell id="app1" value="&lt;b&gt;Backstop&lt;/b&gt;: circuit breakers (built)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;" vertex="1" parent="apps">
-          <mxGeometry x="20" y="45" width="230" height="50" as="geometry" />
+          <mxGeometry x="20" y="45" width="230" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="app6" value="&lt;b&gt;Token migration&lt;/b&gt;: ERC-20 lock on Ethereum, TIP-20 claim here (built, local)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;" vertex="1" parent="apps">
+          <mxGeometry x="20" y="100" width="230" height="45" as="geometry" />
         </mxCell>
         <mxCell id="app2" value="Lending collateral gates" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;dashed=1;" vertex="1" parent="apps">
-          <mxGeometry x="20" y="110" width="230" height="50" as="geometry" />
+          <mxGeometry x="20" y="155" width="230" height="45" as="geometry" />
         </mxCell>
         <mxCell id="app3" value="Issuer pause and compliance mirroring" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;dashed=1;" vertex="1" parent="apps">
-          <mxGeometry x="20" y="175" width="230" height="50" as="geometry" />
+          <mxGeometry x="20" y="210" width="230" height="45" as="geometry" />
         </mxCell>
         <mxCell id="app4" value="Claims and gating: NFTs, ENS, airdrops" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;dashed=1;" vertex="1" parent="apps">
-          <mxGeometry x="20" y="240" width="230" height="50" as="geometry" />
+          <mxGeometry x="20" y="265" width="230" height="45" as="geometry" />
         </mxCell>
         <mxCell id="app5" value="Governance from Ethereum" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;dashed=1;" vertex="1" parent="apps">
-          <mxGeometry x="20" y="305" width="230" height="50" as="geometry" />
+          <mxGeometry x="20" y="320" width="230" height="45" as="geometry" />
         </mxCell>
 
         <mxCell id="e1" value="static calls" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endSize=8;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;labelBackgroundColor=#dae8fc;" edge="1" parent="1" source="snap" target="contracts">
@@ -109,7 +112,7 @@
         <mxCell id="notrust" value="&lt;b&gt;You don't trust:&lt;/b&gt; guardian sets, DVNs, oracle committees, relayers or RPC providers. They can delay a read, not forge it." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;spacingLeft=12;spacingRight=12;" vertex="1" parent="1">
           <mxGeometry x="760" y="620" width="700" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="legend" value="Solid border: built, the whole loop run locally (scripts/dry-run.sh) · Dashed: roadmap · An Ethereum block reaches Tempo after finality (~13 min) + proving" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#555555;" vertex="1" parent="1">
+        <mxCell id="legend" value="Solid border: built, the whole loop run locally (scripts/dry-run.sh, scripts/migrate-dry-run.sh) · Dashed: roadmap · An Ethereum block reaches Tempo after finality (~13 min) + proving" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#555555;" vertex="1" parent="1">
           <mxGeometry x="40" y="690" width="1420" height="30" as="geometry" />
         </mxCell>
       </root>
